@@ -1,0 +1,20 @@
+{
+  "name": "skillpress",
+  "version": "0.1.0",
+  "description": "Agent skill sync and availability across providers.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "skillpress": "./bin/skillpress.js"
+  },
+  "scripts": {
+    "check": "npm test",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}
+
