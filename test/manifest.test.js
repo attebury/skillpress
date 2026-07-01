@@ -37,6 +37,27 @@ test("manifest validation accepts explicit installed skill entries", () => {
   assert.equal(manifest.entries[0].installed_path, installedPath);
 });
 
+test("manifest validation reads v1 entries without requiring v2 tree fields", () => {
+  const fx = fixture();
+  const installedPath = path.join(fx.homeDir, ".codex", "skills", "runlane-consumer", "SKILL.md");
+  const manifest = validateManifest({
+    schema: MANIFEST_SCHEMA,
+    version: 1,
+    entries: [{
+      skill: "runlane-consumer",
+      provider: "codex",
+      source_path: "agent-skills/src/runlane/runlane-consumer/SKILL.md",
+      source_hash: HASH_A,
+      installed_path: installedPath
+    }]
+  }, fx);
+
+  assert.equal(manifest.version, 1);
+  assert.equal(manifest.entries[0].source_hash, HASH_A);
+  assert.equal(manifest.entries[0].skill_md_hash, null);
+  assert.equal(manifest.entries[0].source_tree_hash, null);
+});
+
 test("manifest validation fails closed on unsafe source and target paths", () => {
   const fx = fixture();
   const validInstalledPath = path.join(fx.homeDir, ".codex", "skills", "runlane-consumer", "SKILL.md");

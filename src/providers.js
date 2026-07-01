@@ -46,6 +46,7 @@ export function providerTargets({ cwd = process.cwd(), homeDir = process.env.HOM
       title: "Codex",
       root: path.join(home, ".codex", "skills"),
       layout: "{root}/{skill}/SKILL.md",
+      kind: "skill-directory",
       root_scope: "home",
       layout_known: true,
       installable: true
@@ -55,6 +56,7 @@ export function providerTargets({ cwd = process.cwd(), homeDir = process.env.HOM
       title: "Agents",
       root: path.join(home, ".agents", "skills"),
       layout: "{root}/{skill}/SKILL.md",
+      kind: "skill-directory",
       root_scope: "home",
       layout_known: true,
       installable: true
@@ -62,8 +64,9 @@ export function providerTargets({ cwd = process.cwd(), homeDir = process.env.HOM
     {
       id: "cursor",
       title: "Cursor",
-      root: path.join(repo, ".cursor", "skills"),
-      layout: "{workspace}/.cursor/skills/{skill}/SKILL.md",
+      root: path.join(repo, ".cursor", "rules", "skillpress"),
+      layout: "{workspace}/.cursor/rules/skillpress/{skill}.mdc",
+      kind: "cursor-rule",
       root_scope: "workspace",
       layout_known: true,
       installable: true
@@ -71,12 +74,12 @@ export function providerTargets({ cwd = process.cwd(), homeDir = process.env.HOM
     {
       id: "claude-code",
       title: "Claude Code",
-      root: null,
-      layout: null,
-      root_scope: "unknown",
-      layout_known: false,
-      installable: false,
-      placeholder_reason: "Provider skill layout is intentionally not claimed until verified."
+      root: path.join(home, ".claude", "skills"),
+      layout: "{root}/{skill}/SKILL.md",
+      kind: "skill-directory",
+      root_scope: "home",
+      layout_known: true,
+      installable: true
     }
   ];
 }
@@ -93,6 +96,10 @@ export function providerById(provider, options = {}) {
 }
 
 export function installedSkillPath(providerTarget, skill) {
+  return installedEntrypointPath(providerTarget, skill);
+}
+
+export function installedSkillRoot(providerTarget, skill) {
   assertSafeSkillId(skill);
   if (!providerTarget?.installable || !providerTarget.root) {
     const error = new Error(`provider '${providerTarget?.id ?? "unknown"}' has no installable skill root`);
@@ -100,5 +107,16 @@ export function installedSkillPath(providerTarget, skill) {
     error.provider = providerTarget?.id ?? null;
     throw error;
   }
-  return path.join(providerTarget.root, skill, "SKILL.md");
+  if (providerTarget.kind === "cursor-rule") {
+    return providerTarget.root;
+  }
+  return path.join(providerTarget.root, skill);
+}
+
+export function installedEntrypointPath(providerTarget, skill) {
+  const root = installedSkillRoot(providerTarget, skill);
+  if (providerTarget.kind === "cursor-rule") {
+    return path.join(root, `${skill}.mdc`);
+  }
+  return path.join(root, "SKILL.md");
 }

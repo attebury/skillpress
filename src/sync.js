@@ -1,11 +1,13 @@
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { MANIFEST_SCHEMA, MANIFEST_VERSION, readManifestDocument, writeManifestDocument } from "./manifest.js";
-import { installedSkillPath, providerById, providerTargets } from "./providers.js";
+import { installedEntrypointPath, installedSkillRoot, providerById, providerTargets } from "./providers.js";
 import { discoverSkillSources } from "./source.js";
-import { renderSkill } from "./render.js";
+import { renderEntrypoint } from "./render.js";
 import { loadCommandContracts } from "./contracts.js";
 import { lintSkillContent } from "./skill-lint.js";
+import { resolveRuntimeConfig } from "./config.js";
 
 function syncIssue(code, severity, message, details = {}) {
   return { code, severity, message, ...details };
@@ -29,9 +31,20 @@ function manifestInstalledPath(providerTarget, installedPath, { cwd, homeDir }) 
   return installedPath;
 }
 
-function selectProviders({ provider, cwd, homeDir }) {
+function sourceCommit(cwd) {
+  try {
+    return execFileSync("git", ["rev-parse", "HEAD"], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+  } catch {
+    return null;
+  }
+}
+
+function selectProviders({ provider, providers: configuredProviders, cwd, homeDir }) {
   if (provider) {
     return [providerById(provider, { cwd, homeDir })];
+  }
+  if (configuredProviders?.length) {
+    return configuredProviders.map((entry) => providerById(entry, { cwd, homeDir }));
   }
   return providerTargets({ cwd, homeDir }).filter((target) => target.installable);
 }
@@ -51,17 +64,32 @@ export function syncPacket(options = {}) {
   const homeDir = path.resolve(options.homeDir ?? process.env.HOME ?? ".");
   const dryRun = options.dryRun === true;
   const generatedAt = options.generatedAt ?? new Date().toISOString();
+  const runtimeConfig = resolveRuntimeConfig({
+    cwd,
+    configPath: options.configPath,
+    sourceRoot: options.sourceRoot,
+    sourceLayout: options.sourceLayout,
+    contractRoot: options.contractRoot,
+    provider: options.provider,
+    providers: options.providers,
+    policyPacks: options.policyPacks
+  });
   const sourceState = discoverSkillSources({
     cwd,
-    sourceRoot: options.sourceRoot,
+    sourceRoots: runtimeConfig.config.source_roots,
     tool: options.tool
   });
   const contractState = loadCommandContracts({
     cwd,
-    contractRoot: options.contractRoot
+    contractRoot: runtimeConfig.config.contract_root
   });
-  const providers = selectProviders({ provider: options.provider, cwd, homeDir });
-  const issues = [...sourceState.issues, ...contractState.issues];
+  const providers = selectProviders({
+    provider: options.provider,
+    providers: runtimeConfig.config.providers,
+    cwd,
+    homeDir
+  });
+  const issues = [...runtimeConfig.issues, ...sourceState.issues, ...contractState.issues];
 
   for (const provider of providers) {
     if (!provider.installable) {
@@ -83,7 +111,9 @@ export function syncPacket(options = {}) {
       skill: source.skill,
       tool: source.tool,
       path: source.path,
-      contracts: contractState.contracts
+      contracts: contractState.contracts,
+      policyPacks: runtimeConfig.config.policy_packs,
+      source
     });
     for (const finding of findings) {
       issues.push(syncIssue(finding.code, finding.severity, finding.message, {
@@ -98,26 +128,67 @@ export function syncPacket(options = {}) {
   const writes = [];
   const newManifestEntries = [];
   if (!issues.some((entry) => entry.severity === "error")) {
+    const commit = sourceCommit(cwd);
     for (const source of sourceState.sources) {
       for (const provider of providers) {
-        const installedPath = installedSkillPath(provider, source.skill);
-        const content = renderSkill({ source, provider: provider.id, generatedAt });
-        writes.push({
+        const installedRoot = installedSkillRoot(provider, source.skill);
+        const installedPath = installedEntrypointPath(provider, source.skill);
+        const entrypointContent = renderEntrypoint({ source, providerTarget: provider, generatedAt });
+        const files = [];
+        if (provider.kind === "cursor-rule") {
+          files.push({
+            relative_path: `${source.skill}.mdc`,
+            installed_path: installedPath,
+            content: entrypointContent,
+            bytes: Buffer.byteLength(entrypointContent, "utf8")
+          });
+          if (source.has_auxiliary_files) {
+            issues.push(syncIssue("cursor_auxiliary_files_ignored", "warning", "Cursor rules cannot consume auxiliary Agent Skills files directly", {
+              skill: source.skill,
+              tool: source.tool,
+              provider: provider.id
+            }));
+          }
+        } else {
+          for (const file of source.files) {
+            const content = file.relative_path === "SKILL.md"
+              ? entrypointContent
+              : fs.readFileSync(file.path);
+            files.push({
+              relative_path: file.relative_path,
+              installed_path: path.join(installedRoot, file.relative_path),
+              content,
+              bytes: Buffer.isBuffer(content) ? content.length : Buffer.byteLength(content, "utf8")
+            });
+          }
+        }
+        const write = {
           tool: source.tool,
           skill: source.skill,
           provider: provider.id,
           source_path: source.source_path,
           source_hash: source.source_hash,
+          skill_md_hash: source.skill_md_hash,
+          source_tree_hash: source.source_tree_hash,
+          installed_root: installedRoot,
           installed_path: installedPath,
-          bytes: Buffer.byteLength(content, "utf8"),
-          content
-        });
+          bytes: files.reduce((total, file) => total + file.bytes, 0),
+          files
+        };
+        writes.push(write);
         newManifestEntries.push({
           skill: source.skill,
           provider: provider.id,
           source_path: source.source_path,
+          source_root_path: source.source_root_path,
           source_hash: source.source_hash,
+          skill_md_hash: source.skill_md_hash,
+          source_tree_hash: source.source_tree_hash,
+          source_layout: source.source_layout,
+          source_commit: commit,
           installed_path: manifestInstalledPath(provider, installedPath, { cwd, homeDir }),
+          installed_root: manifestInstalledPath(provider, installedRoot, { cwd, homeDir }),
+          files: files.map((file) => file.relative_path),
           target: provider.id
         });
       }
@@ -128,14 +199,24 @@ export function syncPacket(options = {}) {
   if (!issues.some((entry) => entry.severity === "error")) {
     const manifestState = readManifestDocument(options.manifestPath, { cwd, homeDir });
     manifestPath = manifestState.path;
+    const existingEntries = manifestState.manifest.entries.map((entry) => {
+      const target = providerById(entry.provider, { cwd, homeDir });
+      return {
+        ...entry,
+        installed_path: manifestInstalledPath(target, entry.installed_path, { cwd, homeDir }),
+        installed_root: manifestInstalledPath(target, entry.installed_root, { cwd, homeDir })
+      };
+    });
     const document = {
       schema: MANIFEST_SCHEMA,
       version: MANIFEST_VERSION,
-      entries: mergeManifestEntries(manifestState.document.entries ?? [], newManifestEntries)
+      entries: mergeManifestEntries(existingEntries, newManifestEntries)
     };
     if (!dryRun) {
       for (const write of writes) {
-        atomicWriteFile(write.installed_path, write.content);
+        for (const file of write.files) {
+          atomicWriteFile(file.installed_path, file.content);
+        }
       }
       writeManifestDocument(options.manifestPath, document, { cwd, homeDir });
     }
@@ -149,7 +230,13 @@ export function syncPacket(options = {}) {
     status: errorCount > 0 ? "fail" : "synced",
     dry_run: dryRun,
     source_root: sourceState.root,
+    source_roots: sourceState.roots,
     command_contract_root: contractState.root,
+    config: {
+      path: runtimeConfig.path,
+      present: runtimeConfig.present,
+      policy_packs: runtimeConfig.config.policy_packs
+    },
     manifest: {
       path: manifestPath,
       updated: errorCount === 0 && !dryRun,
@@ -159,8 +246,12 @@ export function syncPacket(options = {}) {
       provider: options.provider ?? null,
       tool: options.tool ?? null
     },
-    writes: writes.map(({ content, ...write }) => ({
+    writes: writes.map((write) => ({
       ...write,
+      files: write.files.map(({ content, ...file }) => ({
+        ...file,
+        written: errorCount === 0 && !dryRun
+      })),
       written: errorCount === 0 && !dryRun
     })),
     issues,
