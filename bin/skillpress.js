@@ -38,7 +38,9 @@ function usage() {
 const [command, ...args] = process.argv.slice(2);
 const wantsJson = args.includes("--json");
 
-if (command === "boundary") {
+if (command === "--help" || command === "-h" || command === "help") {
+  process.stdout.write(`${usage()}\n`);
+} else if (command === "boundary") {
   if (!wantsJson) {
     process.stderr.write("boundary currently requires --json\n");
     process.exitCode = 2;

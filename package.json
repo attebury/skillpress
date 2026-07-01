@@ -4,6 +4,14 @@
   "description": "Agent skill sync and availability across providers.",
   "license": "MIT",
   "type": "module",
+  "files": [
+    "agent-skills/",
+    "bin/",
+    "docs/",
+    "src/",
+    "README.md",
+    "skillpress.config.json"
+  ],
   "bin": {
     "skillpress": "./bin/skillpress.js"
   },
@@ -17,4 +25,3 @@
   "dependencies": {},
   "devDependencies": {}
 }
-
