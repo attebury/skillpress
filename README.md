@@ -14,19 +14,42 @@ skills, promote CLI binaries, run lane orchestration, or own workflow proof.
 skillpress boundary --json
 skillpress status --json
 skillpress doctor --json
-skillpress sync --provider codex --tool runlane
+skillpress sync --json --provider codex --tool runlane
 ```
 
-The bootstrap slice implements read-only `boundary`, `status`, and `doctor`
-JSON commands. `sync` is intentionally not implemented until the verifier is
-trustworthy.
-
-`status` and `doctor` accept an optional manifest:
+`status`, `doctor`, and `sync` accept provider, tool, source, contract, and
+manifest filters:
 
 ```bash
 skillpress status --json --manifest skillpress.manifest.json
-skillpress doctor --json --provider codex
+skillpress doctor --json --provider codex --tool remogram
+skillpress sync --json --provider cursor --tool runlane
+skillpress sync --json --tool remogram --dry-run
 ```
+
+By default canonical source is read from `agent-skills/src` and command
+contracts are read from `agent-skills/contracts`.
+
+## Canonical Source
+
+Author skill prose once under the repo-owned source tree:
+
+```text
+agent-skills/src/{tool}/{skill}/SKILL.md
+agent-skills/contracts/{remogram,runlane,topogram}.commands.json
+```
+
+Installed roots are targets only:
+
+```text
+~/.codex/skills/{skill}/SKILL.md
+~/.agents/skills/{skill}/SKILL.md
+.cursor/skills/{skill}/SKILL.md
+```
+
+Each installed file is rendered with a generated header recording
+`source_path`, `source_hash`, `generated_at`, `target`, `tool`, and `skill`.
+Do not edit installed provider roots as canonical source.
 
 ## Manifest Shape
 
@@ -53,6 +76,21 @@ Each entry must identify the skill, provider target, source path or source
 repo, a source revision/hash, and the installed `SKILL.md` path. Unsafe paths,
 unknown providers, and paths outside the provider root fail closed.
 
+## Verification
+
+`status` and `doctor` compare installed caches to canonical source and report:
+
+- stale or missing generated headers;
+- installed body drift from canonical render;
+- missing manifest-managed installs;
+- unmanaged installed skills when a manifest exists;
+- duplicate provider installs whose skill bodies disagree;
+- malformed Markdown fences;
+- policy drift such as dogfood missing-check waivers, lane `npm link`, hardcoded
+  `origin/main`, stale `remogram cr ...` commands, or unjustified fallback
+  language;
+- command names missing from the local Remogram, Runlane, or Topogram contracts.
+
 ## Provider Targets
 
 - `codex`: `~/.codex/skills/{skill}/SKILL.md`
@@ -60,8 +98,27 @@ unknown providers, and paths outside the provider root fail closed.
 - `cursor`: `.cursor/skills/{skill}/SKILL.md`
 - `claude-code`: placeholder only; Skillpress does not claim a layout yet.
 
+## Promotion Composition
+
+Skillpress promotes skills only. `promote-cli` promotes CLI binaries only.
+Short term, `promote-cli --with-skills` may shell out to:
+
+```bash
+skillpress sync --json --tool runlane
+```
+
+Long term, closeout flows should call the two boundaries explicitly:
+
+```bash
+promote-cli runlane
+skillpress sync --json --tool runlane
+```
+
+The tools may share manifest facts, but neither imports the other's internals.
+
 ## Development
 
 ```bash
 npm test
+npm run check
 ```

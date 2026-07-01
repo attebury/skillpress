@@ -1,0 +1,12 @@
+{
+  "schema": "skillpress.command-contract",
+  "version": 1,
+  "tool": "topogram",
+  "commands": [
+    "work status",
+    "work prep",
+    "work verify",
+    "map validate",
+    "contract export"
+  ]
+}

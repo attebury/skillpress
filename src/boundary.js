@@ -34,7 +34,7 @@ export const SKILLPRESS_BOUNDARY = Object.freeze({
     "skillpress boundary --json",
     "skillpress status --json",
     "skillpress doctor --json",
-    "skillpress sync [--provider codex|agents|cursor|claude-code] [--tool <tool>]"
+    "skillpress sync --json [--provider codex|agents|cursor] [--tool <tool>]"
   ]
 });
 

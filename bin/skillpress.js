@@ -2,6 +2,7 @@
 import { boundaryPacket } from "../src/boundary.js";
 import { doctorPacket } from "../src/doctor.js";
 import { statusPacket } from "../src/status.js";
+import { syncPacket } from "../src/sync.js";
 
 function printJson(packet) {
   process.stdout.write(`${JSON.stringify(packet, null, 2)}\n`);
@@ -18,9 +19,9 @@ function readOption(args, name) {
 function usage() {
   return [
     "skillpress boundary --json",
-    "skillpress status --json [--manifest <path>] [--provider codex|agents|cursor|claude-code]",
-    "skillpress doctor --json [--manifest <path>] [--provider codex|agents|cursor|claude-code]",
-    "skillpress sync [--provider codex|agents|cursor|claude-code] [--tool <tool>]"
+    "skillpress status --json [--manifest <path>] [--provider codex|agents|cursor|claude-code] [--tool <tool>] [--source-root <path>] [--contract-root <path>]",
+    "skillpress doctor --json [--manifest <path>] [--provider codex|agents|cursor|claude-code] [--tool <tool>] [--source-root <path>] [--contract-root <path>]",
+    "skillpress sync --json [--provider codex|agents|cursor] [--tool <tool>] [--manifest <path>] [--source-root <path>] [--contract-root <path>] [--dry-run]"
   ].join("\n");
 }
 
@@ -41,7 +42,10 @@ if (command === "boundary") {
   } else {
     printJson(statusPacket({
       manifestPath: readOption(args, "--manifest"),
-      provider: readOption(args, "--provider")
+      provider: readOption(args, "--provider"),
+      tool: readOption(args, "--tool"),
+      sourceRoot: readOption(args, "--source-root"),
+      contractRoot: readOption(args, "--contract-root")
     }));
   }
 } else if (command === "doctor") {
@@ -51,7 +55,10 @@ if (command === "boundary") {
   } else {
     const packet = doctorPacket({
       manifestPath: readOption(args, "--manifest"),
-      provider: readOption(args, "--provider")
+      provider: readOption(args, "--provider"),
+      tool: readOption(args, "--tool"),
+      sourceRoot: readOption(args, "--source-root"),
+      contractRoot: readOption(args, "--contract-root")
     });
     printJson(packet);
     if (!packet.ok) {
@@ -59,8 +66,34 @@ if (command === "boundary") {
     }
   }
 } else if (command === "sync") {
-  process.stderr.write(`${command} is not implemented in this bootstrap slice\n`);
-  process.exitCode = 2;
+  if (!wantsJson) {
+    process.stderr.write("sync currently requires --json\n");
+    process.exitCode = 2;
+  } else {
+    try {
+      const packet = syncPacket({
+        manifestPath: readOption(args, "--manifest"),
+        provider: readOption(args, "--provider"),
+        tool: readOption(args, "--tool"),
+        sourceRoot: readOption(args, "--source-root"),
+        contractRoot: readOption(args, "--contract-root"),
+        dryRun: args.includes("--dry-run")
+      });
+      printJson(packet);
+      if (!packet.ok) {
+        process.exitCode = 1;
+      }
+    } catch (error) {
+      printJson({
+        ok: false,
+        type: "skillpress_error",
+        schema_version: 1,
+        code: error.code ?? "skillpress_sync_failed",
+        message: error.message
+      });
+      process.exitCode = 1;
+    }
+  }
 } else {
   process.stderr.write(`${usage()}\n`);
   process.exitCode = 2;

@@ -189,3 +189,52 @@ export function readManifest(manifestPath, context = {}) {
     manifest: validateManifest(JSON.parse(raw), { cwd, homeDir })
   };
 }
+
+export function manifestPath({ cwd = process.cwd(), manifestPath: requestedPath = null, homeDir = process.env.HOME ?? "." } = {}) {
+  return path.resolve(path.resolve(cwd), expandHome(requestedPath ?? "skillpress.manifest.json", homeDir));
+}
+
+export function emptyManifest() {
+  return {
+    schema: MANIFEST_SCHEMA,
+    version: MANIFEST_VERSION,
+    entries: []
+  };
+}
+
+export function readManifestDocument(manifestFile, context = {}) {
+  const resolvedPath = manifestPath({
+    cwd: context.cwd,
+    homeDir: context.homeDir,
+    manifestPath: manifestFile
+  });
+  if (!fs.existsSync(resolvedPath)) {
+    return {
+      path: resolvedPath,
+      document: emptyManifest(),
+      manifest: validateManifest(emptyManifest(), context),
+      existed: false
+    };
+  }
+  const document = JSON.parse(fs.readFileSync(resolvedPath, "utf8"));
+  return {
+    path: resolvedPath,
+    document,
+    manifest: validateManifest(document, context),
+    existed: true
+  };
+}
+
+export function writeManifestDocument(manifestFile, document, context = {}) {
+  const resolvedPath = manifestPath({
+    cwd: context.cwd,
+    homeDir: context.homeDir,
+    manifestPath: manifestFile
+  });
+  validateManifest(document, context);
+  fs.mkdirSync(path.dirname(resolvedPath), { recursive: true });
+  const tmp = path.join(path.dirname(resolvedPath), `.${path.basename(resolvedPath)}.${process.pid}.tmp`);
+  fs.writeFileSync(tmp, `${JSON.stringify(document, null, 2)}\n`, { mode: 0o600 });
+  fs.renameSync(tmp, resolvedPath);
+  return resolvedPath;
+}
