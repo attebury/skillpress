@@ -9,6 +9,17 @@ import { fileURLToPath } from "node:url";
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const cli = path.join(repoRoot, "bin", "skillpress.js");
 
+test("top-level help prints usage and exits cleanly", () => {
+  const result = spawnSync(process.execPath, [cli, "--help"], {
+    cwd: repoRoot,
+    encoding: "utf8"
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /skillpress boundary --json/);
+  assert.equal(result.stderr, "");
+});
+
 test("status and doctor JSON commands run against an isolated empty workspace", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "skillpress-cli-"));
   const cwd = path.join(root, "repo");
