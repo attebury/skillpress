@@ -315,7 +315,7 @@ function collectIssues({ inventory, manifestState, sourceState, contractState, p
       tool: source?.tool ?? null
     };
     if (policyPacks.includes("atteway")) {
-      for (const finding of lintPolicyRules(skill.content, lintContext)) {
+      for (const finding of lintPolicyRules(stripGeneratedHeader(skill.content), lintContext)) {
         issues.push(issue(finding.code, finding.severity, finding.message, {
           skill: skill.skill,
           provider: skill.provider,
@@ -324,7 +324,7 @@ function collectIssues({ inventory, manifestState, sourceState, contractState, p
         }));
       }
     }
-    for (const finding of lintCommandContracts(skill.content, contractState.contracts, lintContext)) {
+    for (const finding of lintCommandContracts(stripGeneratedHeader(skill.content), contractState.contracts, lintContext)) {
       issues.push(issue(finding.code, finding.severity, finding.message, {
         skill: skill.skill,
         provider: skill.provider,
