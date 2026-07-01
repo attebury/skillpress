@@ -16,12 +16,22 @@ function readOption(args, name) {
   return args[index + 1] ?? null;
 }
 
+function readOptions(args, name) {
+  const values = [];
+  for (let index = 0; index < args.length; index += 1) {
+    if (args[index] === name && args[index + 1]) {
+      values.push(...args[index + 1].split(",").map((entry) => entry.trim()).filter(Boolean));
+    }
+  }
+  return values.length > 0 ? values : null;
+}
+
 function usage() {
   return [
     "skillpress boundary --json",
-    "skillpress status --json [--manifest <path>] [--provider codex|agents|cursor|claude-code] [--tool <tool>] [--source-root <path>] [--contract-root <path>]",
-    "skillpress doctor --json [--manifest <path>] [--provider codex|agents|cursor|claude-code] [--tool <tool>] [--source-root <path>] [--contract-root <path>]",
-    "skillpress sync --json [--provider codex|agents|cursor] [--tool <tool>] [--manifest <path>] [--source-root <path>] [--contract-root <path>] [--dry-run]"
+    "skillpress status --json [--config <path>] [--manifest <path>] [--provider codex|agents|cursor|claude-code] [--tool <tool>] [--source-root <path>] [--source-layout auto|atteway|agent-skills|claude-skills] [--contract-root <path>] [--policy generic|atteway|none]",
+    "skillpress doctor --json [--config <path>] [--manifest <path>] [--provider codex|agents|cursor|claude-code] [--tool <tool>] [--source-root <path>] [--source-layout auto|atteway|agent-skills|claude-skills] [--contract-root <path>] [--policy generic|atteway|none]",
+    "skillpress sync --json [--config <path>] [--provider codex|agents|cursor|claude-code] [--tool <tool>] [--manifest <path>] [--source-root <path>] [--source-layout auto|atteway|agent-skills|claude-skills] [--contract-root <path>] [--policy generic|atteway|none] [--dry-run]"
   ].join("\n");
 }
 
@@ -41,11 +51,14 @@ if (command === "boundary") {
     process.exitCode = 2;
   } else {
     printJson(statusPacket({
+      configPath: readOption(args, "--config"),
       manifestPath: readOption(args, "--manifest"),
       provider: readOption(args, "--provider"),
       tool: readOption(args, "--tool"),
       sourceRoot: readOption(args, "--source-root"),
-      contractRoot: readOption(args, "--contract-root")
+      sourceLayout: readOption(args, "--source-layout"),
+      contractRoot: readOption(args, "--contract-root"),
+      policyPacks: readOptions(args, "--policy")
     }));
   }
 } else if (command === "doctor") {
@@ -54,11 +67,14 @@ if (command === "boundary") {
     process.exitCode = 2;
   } else {
     const packet = doctorPacket({
+      configPath: readOption(args, "--config"),
       manifestPath: readOption(args, "--manifest"),
       provider: readOption(args, "--provider"),
       tool: readOption(args, "--tool"),
       sourceRoot: readOption(args, "--source-root"),
-      contractRoot: readOption(args, "--contract-root")
+      sourceLayout: readOption(args, "--source-layout"),
+      contractRoot: readOption(args, "--contract-root"),
+      policyPacks: readOptions(args, "--policy")
     });
     printJson(packet);
     if (!packet.ok) {
@@ -72,11 +88,14 @@ if (command === "boundary") {
   } else {
     try {
       const packet = syncPacket({
+        configPath: readOption(args, "--config"),
         manifestPath: readOption(args, "--manifest"),
         provider: readOption(args, "--provider"),
         tool: readOption(args, "--tool"),
         sourceRoot: readOption(args, "--source-root"),
+        sourceLayout: readOption(args, "--source-layout"),
         contractRoot: readOption(args, "--contract-root"),
+        policyPacks: readOptions(args, "--policy"),
         dryRun: args.includes("--dry-run")
       });
       printJson(packet);

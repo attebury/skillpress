@@ -2,6 +2,20 @@ import { GENERATED_HEADER_END, GENERATED_HEADER_START } from "./render.js";
 
 const HEADER_START = GENERATED_HEADER_START;
 const HEADER_END = GENERATED_HEADER_END;
+const POLICY_PACKS = new Set(["generic", "atteway"]);
+
+function uniquePolicies(policies = ["generic"]) {
+  if (policies.includes("none")) {
+    return [];
+  }
+  const selected = [];
+  for (const policy of policies) {
+    if (POLICY_PACKS.has(policy) && !selected.includes(policy)) {
+      selected.push(policy);
+    }
+  }
+  return selected;
+}
 
 export function lintMarkdownFences(content) {
   const findings = [];
@@ -33,13 +47,108 @@ export function lintMarkdownFences(content) {
   return findings;
 }
 
+function parseFrontmatterLine(line, fields, currentPrefix = null) {
+  const match = line.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
+  if (!match) {
+    return null;
+  }
+  const key = currentPrefix ? `${currentPrefix}_${match[1]}` : match[1];
+  let value = match[2].trim();
+  if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+    value = value.slice(1, -1);
+  }
+  fields[key] = value;
+  return match[1];
+}
+
+export function parseSkillFrontmatter(content) {
+  const text = String(content);
+  if (!text.startsWith("---\n") && !text.startsWith("---\r\n")) {
+    return {
+      present: false,
+      fields: {},
+      body_start: 0,
+      errors: []
+    };
+  }
+  const lines = text.split(/\r?\n/);
+  const fields = {};
+  const errors = [];
+  let currentObject = null;
+  for (let index = 1; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (line.trim() === "---") {
+      const bodyStart = lines.slice(0, index + 1).join("\n").length + 1;
+      return {
+        present: true,
+        fields,
+        body_start: bodyStart,
+        errors
+      };
+    }
+    if (line.trim() === "") {
+      continue;
+    }
+    const nestedMatch = line.match(/^\s{2,}([A-Za-z0-9_-]+):\s*(.*)$/);
+    if (nestedMatch && currentObject) {
+      parseFrontmatterLine(`${nestedMatch[1]}: ${nestedMatch[2]}`, fields, currentObject);
+      continue;
+    }
+    const objectMatch = line.match(/^([A-Za-z0-9_-]+):\s*$/);
+    if (objectMatch) {
+      currentObject = objectMatch[1];
+      continue;
+    }
+    currentObject = null;
+    if (!parseFrontmatterLine(line, fields)) {
+      errors.push({
+        code: "frontmatter_invalid_line",
+        severity: "error",
+        line: index + 1,
+        message: "Skill frontmatter line must use key: value syntax"
+      });
+    }
+  }
+  return {
+    present: true,
+    fields,
+    body_start: text.length,
+    errors: [{
+      code: "frontmatter_unclosed",
+      severity: "error",
+      message: "Skill frontmatter is not closed"
+    }, ...errors]
+  };
+}
+
+function findGeneratedHeaderRange(text) {
+  if (text.startsWith(HEADER_START)) {
+    const end = text.indexOf(HEADER_END);
+    return end === -1 ? { start: 0, end: -1 } : { start: 0, end: end + HEADER_END.length };
+  }
+  const frontmatter = parseSkillFrontmatter(text);
+  if (!frontmatter.present || frontmatter.errors.some((entry) => entry.code === "frontmatter_unclosed")) {
+    return null;
+  }
+  const start = text.indexOf(HEADER_START, frontmatter.body_start);
+  if (start === -1) {
+    return null;
+  }
+  const between = text.slice(frontmatter.body_start, start);
+  if (!/^\s*$/.test(between)) {
+    return null;
+  }
+  const end = text.indexOf(HEADER_END, start);
+  return end === -1 ? { start, end: -1 } : { start, end: end + HEADER_END.length };
+}
+
 export function parseGeneratedHeader(content) {
   const text = String(content);
-  if (!text.startsWith(HEADER_START)) {
+  const range = findGeneratedHeaderRange(text);
+  if (!range) {
     return { present: false, fields: {}, errors: [] };
   }
-  const end = text.indexOf(HEADER_END);
-  if (end === -1) {
+  if (range.end === -1) {
     return {
       present: true,
       fields: {},
@@ -50,7 +159,7 @@ export function parseGeneratedHeader(content) {
       }]
     };
   }
-  const block = text.slice(HEADER_START.length, end);
+  const block = text.slice(range.start + HEADER_START.length, range.end - HEADER_END.length);
   const fields = {};
   const errors = [];
   for (const [offset, rawLine] of block.split(/\r?\n/).entries()) {
@@ -106,6 +215,26 @@ export function compareHeaderToManifest(header, manifestEntry) {
       message: "Generated header source_hash does not match manifest"
     });
   }
+  if (manifestEntry.skill_md_hash && header.fields.skill_md_hash !== manifestEntry.skill_md_hash) {
+    findings.push({
+      code: "generated_header_stale",
+      severity: "error",
+      field: "skill_md_hash",
+      expected: manifestEntry.skill_md_hash,
+      actual: header.fields.skill_md_hash ?? null,
+      message: "Generated header skill_md_hash does not match manifest"
+    });
+  }
+  if (manifestEntry.source_tree_hash && header.fields.source_tree_hash !== manifestEntry.source_tree_hash) {
+    findings.push({
+      code: "generated_header_stale",
+      severity: "error",
+      field: "source_tree_hash",
+      expected: manifestEntry.source_tree_hash,
+      actual: header.fields.source_tree_hash ?? null,
+      message: "Generated header source_tree_hash does not match manifest"
+    });
+  }
   if (manifestEntry.source_path && header.fields.source_path !== manifestEntry.source_path) {
     findings.push({
       code: "generated_header_stale",
@@ -136,6 +265,65 @@ function finding(code, message, details = {}) {
     message,
     ...details
   };
+}
+
+export function lintSkillShape(content, context = {}) {
+  const findings = [];
+  const frontmatter = parseSkillFrontmatter(content);
+  if (!frontmatter.present) {
+    findings.push(finding("frontmatter_missing", "SKILL.md must start with Agent Skills frontmatter", {
+      skill: context.skill ?? null,
+      tool: context.tool ?? null
+    }));
+    return findings;
+  }
+  for (const error of frontmatter.errors) {
+    findings.push({
+      ...error,
+      skill: context.skill ?? null,
+      tool: context.tool ?? null
+    });
+  }
+  if (!frontmatter.fields.name) {
+    findings.push(finding("frontmatter_name_missing", "Skill frontmatter must include name", {
+      skill: context.skill ?? null,
+      tool: context.tool ?? null
+    }));
+  }
+  if (!frontmatter.fields.description) {
+    findings.push(finding("frontmatter_description_missing", "Skill frontmatter must include description", {
+      skill: context.skill ?? null,
+      tool: context.tool ?? null
+    }));
+  }
+  return findings;
+}
+
+export function lintReferencedFiles(content, source = null) {
+  if (!source?.files) {
+    return [];
+  }
+  const findings = [];
+  const files = new Set(source.files.map((file) => file.relative_path));
+  const linkRegex = /\[[^\]]+\]\(([^)]+)\)/g;
+  for (const match of String(content).matchAll(linkRegex)) {
+    const target = match[1].trim();
+    if (!target || target.startsWith("#") || /^[a-z][a-z0-9+.-]*:/i.test(target) || target.startsWith("/")) {
+      continue;
+    }
+    const cleanTarget = target.split("#")[0].split("?")[0];
+    if (!cleanTarget || cleanTarget.includes("..")) {
+      continue;
+    }
+    if (!files.has(cleanTarget)) {
+      findings.push(finding("skill_reference_missing", "SKILL.md references a file that is not in the skill directory", {
+        skill: source.skill,
+        tool: source.tool ?? null,
+        reference: cleanTarget
+      }));
+    }
+  }
+  return findings;
 }
 
 function hasAllowedReason(content) {
@@ -196,41 +384,26 @@ function commandKey(match) {
   return [match[1], match[2]].filter(Boolean).join(" ");
 }
 
+function escapeRegex(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 export function lintCommandContracts(content, contracts = {}, context = {}) {
   const text = String(content);
   const findings = [];
-  const remogramAllowed = new Set(contracts.remogram ?? []);
-  const runlaneAllowed = new Set(contracts.runlane ?? []);
-  const topogramAllowed = new Set(contracts.topogram ?? []);
-  const commandPatterns = [
-    {
-      tool: "remogram",
-      allowed: remogramAllowed,
-      regex: /\bremogram\s+(?!-)([a-z-]+)(?:\s+(?!-)([a-z-]+))?\b/g
-    },
-    {
-      tool: "runlane",
-      allowed: runlaneAllowed,
-      regex: /\brunlane\s+(?!-)([a-z-]+)(?:\s+(?!-)([a-z-]+))?\b/g
-    },
-    {
-      tool: "topogram",
-      allowed: topogramAllowed,
-      regex: /\btopogram\s+(?!-)([a-z-]+)(?:\s+(?!-)([a-z-]+))?\b/g
-    }
-  ];
-
-  for (const pattern of commandPatterns) {
-    if (pattern.allowed.size === 0) {
+  for (const [tool, commands] of Object.entries(contracts).sort(([left], [right]) => left.localeCompare(right))) {
+    const allowed = new Set(commands ?? []);
+    if (allowed.size === 0) {
       continue;
     }
-    for (const match of text.matchAll(pattern.regex)) {
+    const regex = new RegExp(`\\b${escapeRegex(tool)}\\s+(?!-)([a-z-]+)(?:\\s+(?!-)([a-z-]+))?\\b`, "g");
+    for (const match of text.matchAll(regex)) {
       const key = commandKey(match);
       const baseKey = match[1];
-      if (!pattern.allowed.has(key) && !pattern.allowed.has(baseKey)) {
-        findings.push(finding("command_contract_unknown", `Command '${pattern.tool} ${key}' is not in the ${pattern.tool} contract`, {
-          tool: pattern.tool,
-          command: `${pattern.tool} ${key}`,
+      if (!allowed.has(key) && !allowed.has(baseKey)) {
+        findings.push(finding("command_contract_unknown", `Command '${tool} ${key}' is not in the ${tool} contract`, {
+          tool,
+          command: `${tool} ${key}`,
           skill: context.skill ?? null,
           path: context.path ?? null
         }));
@@ -241,9 +414,30 @@ export function lintCommandContracts(content, contracts = {}, context = {}) {
 }
 
 export function lintSkillContent(content, context = {}) {
-  return [
-    ...lintMarkdownFences(content),
-    ...lintPolicyRules(content, context),
-    ...lintCommandContracts(content, context.contracts ?? {}, context)
-  ];
+  const policies = uniquePolicies(context.policyPacks ?? ["generic"]);
+  const findings = [];
+  if (policies.includes("generic")) {
+    findings.push(
+      ...lintMarkdownFences(content),
+      ...lintSkillShape(content, context),
+      ...lintReferencedFiles(content, context.source ?? null),
+      ...lintCommandContracts(content, context.contracts ?? {}, context)
+    );
+  }
+  if (policies.includes("atteway")) {
+    findings.push(...lintPolicyRules(content, context));
+  }
+  if (!policies.includes("generic") && policies.includes("atteway")) {
+    findings.push(...lintCommandContracts(content, context.contracts ?? {}, context));
+  }
+  return findings;
+}
+
+export function stripSkillFrontmatter(content) {
+  const text = String(content);
+  const frontmatter = parseSkillFrontmatter(text);
+  if (!frontmatter.present || frontmatter.errors.length > 0) {
+    return text;
+  }
+  return text.slice(frontmatter.body_start).replace(/^\s+/, "");
 }

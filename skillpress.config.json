@@ -1,0 +1,11 @@
+{
+  "source_roots": [
+    {
+      "path": "agent-skills/src",
+      "layout": "atteway"
+    }
+  ],
+  "contract_root": "agent-skills/contracts",
+  "policy_packs": ["generic", "atteway"],
+  "providers": ["codex", "agents", "cursor", "claude-code"]
+}

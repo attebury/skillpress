@@ -2,8 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { DEFAULT_CONTRACT_ROOT } from "./source.js";
 import { isPathInside } from "./providers.js";
-
-const CONTRACT_TOOLS = Object.freeze(["remogram", "runlane", "topogram"]);
+import { assertSafeToolId } from "./source.js";
 
 function normalizeCommands(document, tool) {
   const commands = Array.isArray(document?.commands) ? document.commands : [];
@@ -19,9 +18,6 @@ export function loadCommandContracts({ cwd = process.cwd(), contractRoot = DEFAU
   const contracts = {};
   const issues = [];
   if (!isPathInside(root, resolvedCwd)) {
-    for (const tool of CONTRACT_TOOLS) {
-      contracts[tool] = [];
-    }
     return {
       root,
       contracts,
@@ -33,22 +29,24 @@ export function loadCommandContracts({ cwd = process.cwd(), contractRoot = DEFAU
       }]
     };
   }
-  for (const tool of CONTRACT_TOOLS) {
-    const filePath = path.join(root, `${tool}.commands.json`);
-    if (!fs.existsSync(filePath)) {
-      contracts[tool] = [];
+  if (!fs.existsSync(root)) {
+    return { root, contracts, issues };
+  }
+  for (const dirent of fs.readdirSync(root, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+    if (!dirent.isFile() || !dirent.name.endsWith(".commands.json")) {
       continue;
     }
+    const filePath = path.join(root, dirent.name);
     try {
       const document = JSON.parse(fs.readFileSync(filePath, "utf8"));
+      const tool = assertSafeToolId(document.tool ?? dirent.name.replace(/\.commands\.json$/, ""));
       contracts[tool] = normalizeCommands(document, tool);
     } catch (error) {
-      contracts[tool] = [];
       issues.push({
         code: "command_contract_invalid",
         severity: "error",
-        message: `Command contract for ${tool} could not be read`,
-        tool,
+        message: "Command contract could not be read",
+        tool: null,
         path: filePath,
         error: error.message
       });

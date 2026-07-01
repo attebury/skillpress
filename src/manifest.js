@@ -8,7 +8,8 @@ import {
 } from "./providers.js";
 
 export const MANIFEST_SCHEMA = "skillpress.install-manifest";
-export const MANIFEST_VERSION = 1;
+export const MANIFEST_VERSION = 2;
+export const READABLE_MANIFEST_VERSIONS = Object.freeze([1, 2]);
 
 const SAFE_SOURCE_REPO = /^[A-Za-z0-9._/-]+$/;
 const SAFE_VERSION = /^[A-Za-z0-9._:+-]+$/;
@@ -41,8 +42,15 @@ function validateSafeRelativePath(value, field) {
   return raw;
 }
 
+function validateOptionalSafeRelativePath(value, field) {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  return validateSafeRelativePath(value, field);
+}
+
 function validateOptionalSha(value, field) {
-  if (value === undefined) {
+  if (value === undefined || value === null) {
     return undefined;
   }
   const raw = requireString(value, field, { max: 80 });
@@ -53,7 +61,7 @@ function validateOptionalSha(value, field) {
 }
 
 function validateOptionalHash(value, field) {
-  if (value === undefined) {
+  if (value === undefined || value === null) {
     return undefined;
   }
   const raw = requireString(value, field, { max: 80 });
@@ -63,10 +71,10 @@ function validateOptionalHash(value, field) {
   return raw;
 }
 
-function normalizeInstalledPath(value, providerTarget, { cwd, homeDir }) {
-  const raw = requireString(value, "installed_path", { max: 2048 });
+function normalizeProviderPath(value, providerTarget, { cwd, homeDir, field }) {
+  const raw = requireString(value, field, { max: 2048 });
   if (raw.includes("\0")) {
-    throw manifestError("manifest_unsafe_path", "installed_path must not contain NUL", { field: "installed_path" });
+    throw manifestError("manifest_unsafe_path", `${field} must not contain NUL`, { field });
   }
   const expanded = expandHome(raw, homeDir);
   const resolved = path.resolve(cwd, expanded);
@@ -76,11 +84,24 @@ function normalizeInstalledPath(value, providerTarget, { cwd, homeDir }) {
     });
   }
   if (!isPathInside(resolved, providerTarget.root)) {
-    throw manifestError("manifest_path_outside_provider_root", "installed_path must stay inside provider root", {
+    throw manifestError("manifest_path_outside_provider_root", `${field} must stay inside provider root`, {
       provider: providerTarget.id,
-      installed_path: resolved,
+      [field]: resolved,
       provider_root: providerTarget.root
     });
+  }
+  return resolved;
+}
+
+function normalizeInstalledPath(value, providerTarget, { cwd, homeDir }) {
+  const resolved = normalizeProviderPath(value, providerTarget, { cwd, homeDir, field: "installed_path" });
+  if (providerTarget.kind === "cursor-rule") {
+    if (path.extname(resolved) !== ".mdc") {
+      throw manifestError("manifest_invalid_installed_path", "cursor installed_path must point to an .mdc rule", {
+        installed_path: resolved
+      });
+    }
+    return resolved;
   }
   if (path.basename(resolved) !== "SKILL.md") {
     throw manifestError("manifest_invalid_installed_path", "installed_path must point to SKILL.md", {
@@ -88,6 +109,25 @@ function normalizeInstalledPath(value, providerTarget, { cwd, homeDir }) {
     });
   }
   return resolved;
+}
+
+function normalizeInstalledRoot(value, providerTarget, { cwd, homeDir }) {
+  if (value === undefined || value === null) {
+    return path.dirname(normalizeInstalledPath(providerTarget.kind === "cursor-rule"
+      ? path.join(providerTarget.root, "__placeholder__.mdc")
+      : path.join(providerTarget.root, "__placeholder__", "SKILL.md"), providerTarget, { cwd, homeDir }));
+  }
+  return normalizeProviderPath(value, providerTarget, { cwd, homeDir, field: "installed_root" });
+}
+
+function validateFiles(value) {
+  if (value === undefined || value === null) {
+    return [];
+  }
+  if (!Array.isArray(value)) {
+    throw manifestError("manifest_invalid_files", "files must be an array of relative paths");
+  }
+  return value.map((entry) => validateSafeRelativePath(entry, "files[]"));
 }
 
 export function validateManifestEntry(entry, context = {}) {
@@ -99,9 +139,8 @@ export function validateManifestEntry(entry, context = {}) {
   const skill = assertSafeSkillId(requireString(entry.skill, "skill", { max: 120 }));
   const provider = requireString(entry.provider, "provider", { max: 80 });
   const providerTarget = providerById(provider, { cwd, homeDir });
-  const sourcePath = entry.source_path === undefined
-    ? undefined
-    : validateSafeRelativePath(entry.source_path, "source_path");
+  const sourcePath = validateOptionalSafeRelativePath(entry.source_path, "source_path");
+  const sourceRootPath = validateOptionalSafeRelativePath(entry.source_root_path, "source_root_path");
   const sourceRepo = entry.source_repo === undefined
     ? undefined
     : requireString(entry.source_repo, "source_repo", { max: 256 });
@@ -117,7 +156,9 @@ export function validateManifestEntry(entry, context = {}) {
   const sourceCommit = validateOptionalSha(entry.source_commit, "source_commit");
   const sourceSha = validateOptionalSha(entry.source_sha, "source_sha");
   const sourceHash = validateOptionalHash(entry.source_hash, "source_hash");
-  if (!sourceCommit && !sourceSha && !sourceHash) {
+  const skillMdHash = validateOptionalHash(entry.skill_md_hash, "skill_md_hash");
+  const sourceTreeHash = validateOptionalHash(entry.source_tree_hash, "source_tree_hash");
+  if (!sourceCommit && !sourceSha && !sourceHash && !skillMdHash && !sourceTreeHash) {
     throw manifestError("manifest_source_revision_missing", "entry must include source_commit, source_sha, or source_hash", {
       skill,
       provider
@@ -129,16 +170,26 @@ export function validateManifestEntry(entry, context = {}) {
   }
 
   const installedPath = normalizeInstalledPath(entry.installed_path, providerTarget, { cwd, homeDir });
+  const installedRoot = entry.installed_root === undefined || entry.installed_root === null
+    ? path.dirname(installedPath)
+    : normalizeInstalledRoot(entry.installed_root, providerTarget, { cwd, homeDir });
+  const files = validateFiles(entry.files);
 
   return {
     skill,
     provider,
     source_path: sourcePath ?? null,
+    source_root_path: sourceRootPath ?? null,
     source_repo: sourceRepo ?? null,
     source_commit: sourceCommit ?? null,
     source_sha: sourceSha ?? null,
     source_hash: sourceHash ?? null,
+    skill_md_hash: skillMdHash ?? null,
+    source_tree_hash: sourceTreeHash ?? null,
+    source_layout: entry.source_layout === undefined || entry.source_layout === null ? null : requireString(entry.source_layout, "source_layout", { max: 80 }),
     installed_path: installedPath,
+    installed_root: installedRoot,
+    files,
     version,
     target: entry.target === undefined ? provider : requireString(entry.target, "target", { max: 80 })
   };
@@ -153,8 +204,8 @@ export function validateManifest(document, context = {}) {
       schema: document.schema
     });
   }
-  if (document.version !== MANIFEST_VERSION) {
-    throw manifestError("manifest_version_unsupported", `manifest version must be ${MANIFEST_VERSION}`, {
+  if (!READABLE_MANIFEST_VERSIONS.includes(document.version)) {
+    throw manifestError("manifest_version_unsupported", `manifest version must be one of ${READABLE_MANIFEST_VERSIONS.join(", ")}`, {
       version: document.version
     });
   }
@@ -174,7 +225,7 @@ export function validateManifest(document, context = {}) {
   }
   return {
     schema: MANIFEST_SCHEMA,
-    version: MANIFEST_VERSION,
+    version: document.version,
     entries
   };
 }

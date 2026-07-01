@@ -40,7 +40,15 @@ test("sync JSON command installs a canonical skill into an isolated provider roo
   const homeDir = path.join(root, "home");
   fs.mkdirSync(path.join(cwd, "agent-skills", "src", "runlane", "runlane-consumer"), { recursive: true });
   fs.mkdirSync(homeDir, { recursive: true });
-  fs.writeFileSync(path.join(cwd, "agent-skills", "src", "runlane", "runlane-consumer", "SKILL.md"), "# Runlane Consumer\n");
+  fs.writeFileSync(path.join(cwd, "agent-skills", "src", "runlane", "runlane-consumer", "SKILL.md"), [
+    "---",
+    "name: runlane-consumer",
+    "description: Use Runlane facts.",
+    "---",
+    "",
+    "# Runlane Consumer",
+    ""
+  ].join("\n"));
   const env = { ...process.env, HOME: homeDir };
 
   const sync = spawnSync(process.execPath, [cli, "sync", "--json", "--provider", "codex", "--tool", "runlane"], {
@@ -55,4 +63,48 @@ test("sync JSON command installs a canonical skill into an isolated provider roo
   assert.equal(packet.summary.write_count, 1);
   assert.equal(fs.existsSync(path.join(homeDir, ".codex", "skills", "runlane-consumer", "SKILL.md")), true);
   assert.equal(fs.existsSync(path.join(cwd, "skillpress.manifest.json")), true);
+});
+
+test("CLI accepts source layout, policy, config, and cursor provider options", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "skillpress-cli-config-"));
+  const cwd = path.join(root, "repo");
+  const homeDir = path.join(root, "home");
+  fs.mkdirSync(path.join(cwd, "skills", "alpha"), { recursive: true });
+  fs.mkdirSync(homeDir, { recursive: true });
+  fs.writeFileSync(path.join(cwd, "skills", "alpha", "SKILL.md"), [
+    "---",
+    "name: alpha",
+    "description: Alpha skill.",
+    "---",
+    "",
+    "# Alpha",
+    ""
+  ].join("\n"));
+  fs.writeFileSync(path.join(cwd, "skillpress.config.json"), JSON.stringify({
+    source_roots: [{ path: "skills", layout: "agent-skills" }],
+    policy_packs: ["generic"],
+    providers: ["cursor"]
+  }));
+  const env = { ...process.env, HOME: homeDir };
+
+  const sync = spawnSync(process.execPath, [
+    cli,
+    "sync",
+    "--json",
+    "--config",
+    "skillpress.config.json",
+    "--source-layout",
+    "agent-skills",
+    "--policy",
+    "generic",
+    "--provider",
+    "cursor"
+  ], {
+    cwd,
+    env,
+    encoding: "utf8"
+  });
+
+  assert.equal(sync.status, 0, sync.stderr || sync.stdout);
+  assert.equal(fs.existsSync(path.join(cwd, ".cursor", "rules", "skillpress", "alpha.mdc")), true);
 });

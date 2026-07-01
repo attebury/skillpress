@@ -36,7 +36,7 @@ test("status reports duplicate skill names and content conflicts across roots", 
 
 test("status reports malformed markdown fences without requiring a manifest", () => {
   const fx = fixture();
-  writeSkill(path.join(fx.cwd, ".cursor", "skills", "beta", "SKILL.md"), "```md\nunterminated\n");
+  writeSkill(path.join(fx.homeDir, ".codex", "skills", "beta", "SKILL.md"), "```md\nunterminated\n");
 
   const packet = statusPacket({ cwd: fx.cwd, homeDir: fx.homeDir });
   assert.equal(packet.ok, false);
@@ -102,6 +102,11 @@ test("status lints canonical sources before install", () => {
     commands: ["pr view", "pr checks", "merge plan"]
   }));
   writeSkill(path.join(fx.cwd, "agent-skills", "src", "remogram", "remogram-consumer", "SKILL.md"), [
+    "---",
+    "name: remogram-consumer",
+    "description: Use Remogram facts.",
+    "---",
+    "",
     "# Remogram Consumer",
     "",
     "```bash",
@@ -109,11 +114,37 @@ test("status lints canonical sources before install", () => {
     "```"
   ].join("\n"));
 
-  const packet = statusPacket({ cwd: fx.cwd, homeDir: fx.homeDir });
+  const packet = statusPacket({
+    cwd: fx.cwd,
+    homeDir: fx.homeDir,
+    policyPacks: ["generic", "atteway"]
+  });
 
   assert.equal(packet.ok, false);
   assert.ok(packet.issues.some((entry) => entry.code === "policy_stale_remogram_cr_command"));
   assert.ok(packet.issues.some((entry) => entry.code === "command_contract_unknown"));
+});
+
+test("status detects installed auxiliary-file drift", async () => {
+  const fx = fixture();
+  writeSkill(path.join(fx.cwd, "agent-skills", "src", "runlane", "runlane-consumer", "SKILL.md"), [
+    "---",
+    "name: runlane-consumer",
+    "description: Use Runlane facts.",
+    "---",
+    "",
+    "# Runlane Consumer",
+    ""
+  ].join("\n"));
+  writeSkill(path.join(fx.cwd, "agent-skills", "src", "runlane", "runlane-consumer", "scripts", "verify.js"), "console.log('expected');\n");
+  const { syncPacket } = await import("../src/sync.js");
+  assert.equal(syncPacket({ cwd: fx.cwd, homeDir: fx.homeDir, provider: "codex", tool: "runlane" }).ok, true);
+
+  writeSkill(path.join(fx.homeDir, ".codex", "skills", "runlane-consumer", "scripts", "verify.js"), "console.log('drift');\n");
+
+  const packet = statusPacket({ cwd: fx.cwd, homeDir: fx.homeDir });
+  assert.equal(packet.ok, false);
+  assert.ok(packet.issues.some((entry) => entry.code === "installed_skill_drift" && entry.path.endsWith("scripts/verify.js")));
 });
 
 test("status fails closed on canonical source roots outside the repository", () => {

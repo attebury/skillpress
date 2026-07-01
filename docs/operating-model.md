@@ -9,20 +9,43 @@ surfaces and reports drift.
 Canonical source:
 
 ```text
-agent-skills/src/{tool}/{skill}/SKILL.md
+agent-skills/src/{tool}/{skill}/
+  SKILL.md
+  scripts/
+  references/
+  assets/
 agent-skills/contracts/{tool}.commands.json
+```
+
+Generic Agent Skills layouts are also supported through `skillpress.config.json`:
+
+```text
+skills/{skill}/SKILL.md
+.claude/skills/{skill}/SKILL.md
 ```
 
 Install targets:
 
 ```text
-~/.codex/skills/{skill}/SKILL.md
-~/.agents/skills/{skill}/SKILL.md
-.cursor/skills/{skill}/SKILL.md
+~/.codex/skills/{skill}/
+~/.agents/skills/{skill}/
+~/.claude/skills/{skill}/
+.cursor/rules/skillpress/{skill}.mdc
 ```
 
-Claude Code remains a modeled provider with no claimed install layout until the
-layout is verified.
+Directory providers receive full skill directories. Cursor receives a rendered
+project rule and reports a warning when auxiliary Agent Skills files cannot be
+consumed by that surface.
+
+Skillpress itself enables both policy packs:
+
+```json
+{
+  "policy_packs": ["generic", "atteway"]
+}
+```
+
+External users can run only `generic`.
 
 ## Promotion Composition
 
@@ -53,8 +76,9 @@ skillpress doctor --json
 ```
 
 `sync` also verifies canonical source before mutating provider roots. It fails
-closed on malformed Markdown, unsafe source paths, policy drift, and command
-contract drift.
+closed on malformed Agent Skills frontmatter, malformed Markdown, unsafe source
+paths, symlinks, Atteway policy drift when that pack is enabled, and configured
+command contract drift.
 
 ## Open-Source Constraints
 
@@ -62,6 +86,8 @@ The repository should stay free of machine-local credentials and private lane
 state. Tests must use temp HOME/workspace roots and must not read or mutate real
 installed provider roots.
 
-The manifest schema is versioned. Changes to manifest fields, provider layouts,
-or generated headers need tests that cover old bad input and the intended new
-shape.
+The manifest schema is versioned. Version 1 remains readable; version 2 is the
+write target and records installed entrypoint, installed root, copied files,
+skill entrypoint hash, source tree hash, and optional source commit. Changes to
+manifest fields, provider layouts, or generated headers need tests that cover
+old bad input and the intended new shape.
