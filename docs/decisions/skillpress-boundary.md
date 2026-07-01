@@ -33,6 +33,43 @@ agent surfaces, keep them current, and report drift.
 - Security, ownership, readiness, and stack-routing checks fail closed.
 - Provider differences live in target adapters, not divergent prose.
 
+## Bootstrap Product Shape
+
+The first slice is read-only except for normal repository development files.
+It establishes:
+
+- `skillpress boundary --json` for stable ownership data.
+- Provider target modeling for Codex, agent-local roots, Cursor, and a
+  deliberately unknown Claude Code placeholder.
+- Manifest validation for installed skills.
+- `skillpress status --json` and `skillpress doctor --json` foundation checks.
+
+The verifier reports:
+
+- missing manifest-managed installed skills;
+- duplicate skill names across provider roots;
+- duplicate skill content conflicts;
+- stale or missing generated headers for manifest-managed installs;
+- malformed Markdown fences.
+
+`sync` remains out of scope until the read-only verifier is strong enough to
+detect drift before mutating provider caches.
+
+## Manifest Boundary
+
+The install manifest records what is expected on disk per provider. It is not a
+skill authoring format and does not own the source prose. Each entry records:
+
+- skill id;
+- provider target;
+- source path or source repository;
+- source commit, sha, or content hash;
+- installed `SKILL.md` path;
+- optional version.
+
+Manifest paths fail closed when they escape the provider root or use unsafe
+segments. Provider roots are target caches, not canonical source trees.
+
 ## Promote-CLI Delegation
 
 Short term, `promote-cli --with-skills` may delegate to Skillpress:
@@ -61,4 +98,3 @@ Skillpress uses the Runlane `compact-build-gate-v1` profile:
 - No Topogram queue or SDLC records are required for bootstrap.
 - Remogram is forge truth when configured.
 - Runlane is handoff and authority truth.
-
