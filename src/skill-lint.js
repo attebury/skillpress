@@ -1,5 +1,7 @@
-const HEADER_START = "<!-- skillpress";
-const HEADER_END = "-->";
+import { GENERATED_HEADER_END, GENERATED_HEADER_START } from "./render.js";
+
+const HEADER_START = GENERATED_HEADER_START;
+const HEADER_END = GENERATED_HEADER_END;
 
 export function lintMarkdownFences(content) {
   const findings = [];
@@ -104,6 +106,16 @@ export function compareHeaderToManifest(header, manifestEntry) {
       message: "Generated header source_hash does not match manifest"
     });
   }
+  if (manifestEntry.source_path && header.fields.source_path !== manifestEntry.source_path) {
+    findings.push({
+      code: "generated_header_stale",
+      severity: "error",
+      field: "source_path",
+      expected: manifestEntry.source_path,
+      actual: header.fields.source_path ?? null,
+      message: "Generated header source_path does not match manifest"
+    });
+  }
   if (header.fields.target && header.fields.target !== manifestEntry.provider) {
     findings.push({
       code: "generated_header_stale",
@@ -115,4 +127,123 @@ export function compareHeaderToManifest(header, manifestEntry) {
     });
   }
   return findings;
+}
+
+function finding(code, message, details = {}) {
+  return {
+    code,
+    severity: "error",
+    message,
+    ...details
+  };
+}
+
+function hasAllowedReason(content) {
+  return /(?:why allowed|allowed reason|external user|explicitly requested)\s*:/i.test(content);
+}
+
+export function lintPolicyRules(content, context = {}) {
+  const text = String(content);
+  const lower = text.toLowerCase();
+  const findings = [];
+  const skill = context.skill ?? null;
+  const tool = context.tool ?? null;
+  const location = context.path ?? null;
+  const dogfoodish = /dogfood/.test(lower) || /dogfood/i.test(String(skill)) || /dogfood/i.test(String(location));
+
+  if (
+    dogfoodish &&
+    /\b(?:allow_missing_checks|allow_pending_checks|REMOGRAM_ALLOW_MISSING_CHECKS|REMOGRAM_ALLOW_PENDING_CHECKS)\b/i.test(text)
+  ) {
+    findings.push(finding("policy_missing_pending_check_waiver_forbidden", "Dogfood skills must not allow missing or pending checks", {
+      skill,
+      tool
+    }));
+  }
+
+  if (/\bnpm\s+link\b/i.test(text) && /\b(?:lane|dogfood|worktree|local)\b/i.test(text)) {
+    findings.push(finding("policy_lane_npm_link_forbidden", "Lane and dogfood instructions must not use npm link", {
+      skill,
+      tool
+    }));
+  }
+
+  if (/\borigin\/main\b/.test(text) && !/\bcanonical_integration_ref\b/.test(text)) {
+    findings.push(finding("policy_hardcoded_origin_main", "Generic workflow skills must use configured canonical_integration_ref instead of hardcoded origin/main", {
+      skill,
+      tool
+    }));
+  }
+
+  if (/\bremogram\s+cr\s+(?:view|checks|merge-plan)\b/.test(text)) {
+    findings.push(finding("policy_stale_remogram_cr_command", "Skill text uses stale remogram cr command names", {
+      skill,
+      tool
+    }));
+  }
+
+  if (/\b(?:compatibility|fallback|shim|bypass)\b/i.test(text) && !hasAllowedReason(text)) {
+    findings.push(finding("policy_unjustified_compatibility_language", "Compatibility, fallback, shim, or bypass language requires an explicit allowed reason", {
+      skill,
+      tool
+    }));
+  }
+
+  return findings;
+}
+
+function commandKey(match) {
+  return [match[1], match[2]].filter(Boolean).join(" ");
+}
+
+export function lintCommandContracts(content, contracts = {}, context = {}) {
+  const text = String(content);
+  const findings = [];
+  const remogramAllowed = new Set(contracts.remogram ?? []);
+  const runlaneAllowed = new Set(contracts.runlane ?? []);
+  const topogramAllowed = new Set(contracts.topogram ?? []);
+  const commandPatterns = [
+    {
+      tool: "remogram",
+      allowed: remogramAllowed,
+      regex: /\bremogram\s+(?!-)([a-z-]+)(?:\s+(?!-)([a-z-]+))?\b/g
+    },
+    {
+      tool: "runlane",
+      allowed: runlaneAllowed,
+      regex: /\brunlane\s+(?!-)([a-z-]+)(?:\s+(?!-)([a-z-]+))?\b/g
+    },
+    {
+      tool: "topogram",
+      allowed: topogramAllowed,
+      regex: /\btopogram\s+(?!-)([a-z-]+)(?:\s+(?!-)([a-z-]+))?\b/g
+    }
+  ];
+
+  for (const pattern of commandPatterns) {
+    if (pattern.allowed.size === 0) {
+      continue;
+    }
+    for (const match of text.matchAll(pattern.regex)) {
+      const key = commandKey(match);
+      const baseKey = match[1];
+      if (!pattern.allowed.has(key) && !pattern.allowed.has(baseKey)) {
+        findings.push(finding("command_contract_unknown", `Command '${pattern.tool} ${key}' is not in the ${pattern.tool} contract`, {
+          tool: pattern.tool,
+          command: `${pattern.tool} ${key}`,
+          skill: context.skill ?? null,
+          path: context.path ?? null
+        }));
+      }
+    }
+  }
+  return findings;
+}
+
+export function lintSkillContent(content, context = {}) {
+  return [
+    ...lintMarkdownFences(content),
+    ...lintPolicyRules(content, context),
+    ...lintCommandContracts(content, context.contracts ?? {}, context)
+  ];
 }

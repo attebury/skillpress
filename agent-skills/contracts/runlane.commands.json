@@ -1,0 +1,31 @@
+{
+  "schema": "skillpress.command-contract",
+  "version": 1,
+  "tool": "runlane",
+  "commands": [
+    "status",
+    "doctor",
+    "verify",
+    "agent brief",
+    "handoff list",
+    "handoff enqueue",
+    "handoff normalize",
+    "handoff claim",
+    "handoff complete",
+    "handoff fail",
+    "lease acquire",
+    "lease release",
+    "wait checks",
+    "can merge",
+    "merge execute",
+    "merge record",
+    "merge complete-handoff",
+    "repair worktrees",
+    "session authorize-forge-read",
+    "friction report",
+    "friction triage",
+    "friction link",
+    "friction resolve",
+    "friction verify"
+  ]
+}

@@ -1,13 +1,18 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { providerTargets, isPathInside } from "./providers.js";
+import { assertSafeSkillId, providerTargets, isPathInside } from "./providers.js";
 import { readManifest } from "./manifest.js";
+import { loadCommandContracts } from "./contracts.js";
+import { stripGeneratedHeader } from "./render.js";
 import {
   compareHeaderToManifest,
+  lintCommandContracts,
   lintMarkdownFences,
+  lintPolicyRules,
   parseGeneratedHeader
 } from "./skill-lint.js";
+import { discoverSkillSources, sourceByPath } from "./source.js";
 
 function sha256(content) {
   return `sha256:${crypto.createHash("sha256").update(content).digest("hex")}`;
@@ -47,6 +52,7 @@ function inventoryProvider(target) {
       exists: false,
       scanned: false,
       skills: [],
+      issues: [],
       advisory: target.placeholder_reason ?? "Provider root is not installable."
     };
   }
@@ -55,12 +61,24 @@ function inventoryProvider(target) {
       ...target,
       exists: false,
       scanned: true,
-      skills: []
+      skills: [],
+      issues: []
     };
   }
   const skills = [];
+  const issues = [];
   for (const dirent of fs.readdirSync(target.root, { withFileTypes: true })) {
     if (!dirent.isDirectory()) {
+      continue;
+    }
+    try {
+      assertSafeSkillId(dirent.name);
+    } catch (error) {
+      issues.push(issue(error.code ?? "invalid_skill_id", "error", error.message, {
+        provider: target.id,
+        skill: dirent.name,
+        path: path.join(target.root, dirent.name)
+      }));
       continue;
     }
     const skillPath = path.join(target.root, dirent.name, "SKILL.md");
@@ -73,7 +91,8 @@ function inventoryProvider(target) {
     ...target,
     exists: true,
     scanned: true,
-    skills
+    skills,
+    issues
   };
 }
 
@@ -92,11 +111,47 @@ function manifestEntryKey(entry) {
   return `${entry.provider}\0${entry.installed_path}`;
 }
 
-function collectIssues({ inventory, manifestState }) {
+function collectSourceIssues({ sourceState, contractState }) {
+  const issues = [];
+  for (const source of sourceState.sources) {
+    const context = {
+      skill: source.skill,
+      tool: source.tool,
+      path: source.path
+    };
+    for (const finding of lintPolicyRules(source.content, context)) {
+      issues.push(issue(finding.code, finding.severity, finding.message, {
+        skill: source.skill,
+        tool: source.tool,
+        path: source.path
+      }));
+    }
+    for (const finding of lintCommandContracts(source.content, contractState.contracts, context)) {
+      issues.push(issue(finding.code, finding.severity, finding.message, {
+        skill: source.skill,
+        tool: finding.tool,
+        path: source.path,
+        command: finding.command
+      }));
+    }
+    for (const finding of lintMarkdownFences(source.content)) {
+      issues.push(issue(finding.code, finding.severity, finding.message, {
+        skill: source.skill,
+        tool: source.tool,
+        path: source.path,
+        line: finding.line
+      }));
+    }
+  }
+  return issues;
+}
+
+function collectIssues({ inventory, manifestState, sourceState, contractState }) {
   const issues = [];
   const skills = inventory.flatMap((provider) => provider.skills);
   const manifestEntries = manifestState.manifest?.entries ?? [];
   const manifestByPath = new Map(manifestEntries.map((entry) => [manifestEntryKey(entry), entry]));
+  const canonicalByPath = sourceByPath(sourceState.sources);
   const installedKeys = new Set(skills.map((skill) => `${skill.provider}\0${skill.path}`));
 
   for (const entry of manifestEntries) {
@@ -107,12 +162,30 @@ function collectIssues({ inventory, manifestState }) {
         path: entry.installed_path
       }));
     }
+    if (entry.source_path) {
+      const source = canonicalByPath.get(entry.source_path);
+      if (!source) {
+        issues.push(issue("canonical_source_missing_for_manifest", "error", "Manifest entry points to a missing canonical skill source", {
+          skill: entry.skill,
+          provider: entry.provider,
+          source_path: entry.source_path
+        }));
+      } else if (entry.source_hash && entry.source_hash !== source.source_hash) {
+        issues.push(issue("manifest_source_hash_stale", "error", "Manifest source_hash does not match current canonical source", {
+          skill: entry.skill,
+          provider: entry.provider,
+          source_path: entry.source_path,
+          expected: source.source_hash,
+          actual: entry.source_hash
+        }));
+      }
+    }
   }
 
   for (const skill of skills) {
     const manifestEntry = manifestByPath.get(`${skill.provider}\0${skill.path}`) ?? null;
     if (manifestState.present && !manifestEntry) {
-      issues.push(issue("installed_skill_unmanaged", "warning", "Installed skill has no manifest entry", {
+      issues.push(issue("installed_skill_unmanaged", "error", "Installed skill has no manifest entry", {
         skill: skill.skill,
         provider: skill.provider,
         path: skill.path
@@ -126,6 +199,41 @@ function collectIssues({ inventory, manifestState }) {
         field: finding.field,
         expected: finding.expected,
         actual: finding.actual
+      }));
+    }
+    const source = manifestEntry?.source_path ? canonicalByPath.get(manifestEntry.source_path) : null;
+    if (manifestEntry && source) {
+      const installedBody = stripGeneratedHeader(skill.content);
+      if (installedBody !== source.content) {
+        issues.push(issue("installed_skill_drift", "error", "Installed skill content differs from canonical render", {
+          skill: skill.skill,
+          provider: skill.provider,
+          path: skill.path,
+          source_path: source.source_path
+        }));
+      }
+    }
+    const lintContext = {
+      skill: skill.skill,
+      provider: skill.provider,
+      path: skill.path,
+      tool: source?.tool ?? null
+    };
+    for (const finding of lintPolicyRules(skill.content, lintContext)) {
+      issues.push(issue(finding.code, finding.severity, finding.message, {
+        skill: skill.skill,
+        provider: skill.provider,
+        path: skill.path,
+        tool: finding.tool ?? lintContext.tool
+      }));
+    }
+    for (const finding of lintCommandContracts(skill.content, contractState.contracts, lintContext)) {
+      issues.push(issue(finding.code, finding.severity, finding.message, {
+        skill: skill.skill,
+        provider: skill.provider,
+        path: skill.path,
+        tool: finding.tool,
+        command: finding.command
       }));
     }
     for (const finding of skill.markdown.findings) {
@@ -148,12 +256,12 @@ function collectIssues({ inventory, manifestState }) {
     if (group.length < 2) {
       continue;
     }
-    issues.push(issue("duplicate_skill_name", "warning", "Skill name is installed in multiple provider roots", {
+    issues.push(issue("duplicate_skill_name", "info", "Skill name is installed in multiple provider roots", {
       skill: skillName,
       providers: group.map((entry) => entry.provider),
       paths: group.map((entry) => entry.path)
     }));
-    const hashes = new Set(group.map((entry) => entry.content_hash));
+    const hashes = new Set(group.map((entry) => sha256(stripGeneratedHeader(entry.content))));
     if (hashes.size > 1) {
       issues.push(issue("duplicate_skill_content_conflict", "error", "Duplicate skill installs disagree by content hash", {
         skill: skillName,
@@ -168,6 +276,8 @@ function collectIssues({ inventory, manifestState }) {
 export function statusPacket(options = {}) {
   const cwd = path.resolve(options.cwd ?? process.cwd());
   const homeDir = path.resolve(options.homeDir ?? process.env.HOME ?? ".");
+  const sourceState = discoverSkillSources({ cwd, sourceRoot: options.sourceRoot, tool: options.tool });
+  const contractState = loadCommandContracts({ cwd, contractRoot: options.contractRoot });
   const allProviders = providerTargets({ cwd, homeDir });
   const providerIssues = [];
   if (options.provider && !allProviders.some((provider) => provider.id === options.provider)) {
@@ -199,7 +309,11 @@ export function statusPacket(options = {}) {
   const issues = [
     ...providerIssues,
     ...loadIssues,
-    ...collectIssues({ inventory, manifestState })
+    ...inventory.flatMap((provider) => provider.issues ?? []),
+    ...sourceState.issues,
+    ...contractState.issues,
+    ...collectSourceIssues({ sourceState, contractState }),
+    ...collectIssues({ inventory, manifestState, sourceState, contractState })
   ];
   const skills = inventory.flatMap((provider) => provider.skills).map(({ content, ...skill }) => skill);
   const errorCount = issues.filter((entry) => entry.severity === "error").length;
@@ -220,6 +334,15 @@ export function statusPacket(options = {}) {
       path: manifestState.path,
       entry_count: manifestState.manifest?.entries.length ?? 0
     },
+    canonical_sources: {
+      root: sourceState.root,
+      count: sourceState.sources.length,
+      tools: [...new Set(sourceState.sources.map((source) => source.tool))].sort()
+    },
+    command_contracts: {
+      root: contractState.root,
+      tools: Object.fromEntries(Object.entries(contractState.contracts).map(([tool, commands]) => [tool, commands.length]))
+    },
     skills,
     issues,
     summary: {
@@ -231,7 +354,10 @@ export function statusPacket(options = {}) {
       missing_count: issues.filter((entry) => entry.code === "installed_skill_missing").length,
       duplicate_count: issues.filter((entry) => entry.code === "duplicate_skill_name").length,
       conflict_count: issues.filter((entry) => entry.code === "duplicate_skill_content_conflict").length,
-      malformed_markdown_count: issues.filter((entry) => entry.code === "markdown_fence_unbalanced").length
+      malformed_markdown_count: issues.filter((entry) => entry.code === "markdown_fence_unbalanced").length,
+      source_drift_count: issues.filter((entry) => entry.code === "installed_skill_drift" || entry.code === "manifest_source_hash_stale").length,
+      policy_lint_count: issues.filter((entry) => entry.code.startsWith("policy_")).length,
+      command_contract_count: issues.filter((entry) => entry.code === "command_contract_unknown").length
     }
   };
 }

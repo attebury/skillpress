@@ -92,3 +92,34 @@ test("status reports missing installed skills and generated header problems from
   assert.ok(packet.issues.some((entry) => entry.code === "generated_header_missing"));
   assert.ok(packet.issues.some((entry) => entry.code === "generated_header_stale"));
 });
+
+test("status lints canonical sources before install", () => {
+  const fx = fixture();
+  writeSkill(path.join(fx.cwd, "agent-skills", "contracts", "remogram.commands.json"), JSON.stringify({
+    schema: "skillpress.command-contract",
+    version: 1,
+    tool: "remogram",
+    commands: ["pr view", "pr checks", "merge plan"]
+  }));
+  writeSkill(path.join(fx.cwd, "agent-skills", "src", "remogram", "remogram-consumer", "SKILL.md"), [
+    "# Remogram Consumer",
+    "",
+    "```bash",
+    "remogram cr view --number 1 --json",
+    "```"
+  ].join("\n"));
+
+  const packet = statusPacket({ cwd: fx.cwd, homeDir: fx.homeDir });
+
+  assert.equal(packet.ok, false);
+  assert.ok(packet.issues.some((entry) => entry.code === "policy_stale_remogram_cr_command"));
+  assert.ok(packet.issues.some((entry) => entry.code === "command_contract_unknown"));
+});
+
+test("status fails closed on canonical source roots outside the repository", () => {
+  const fx = fixture();
+  const packet = statusPacket({ cwd: fx.cwd, homeDir: fx.homeDir, sourceRoot: path.join(fx.root, "outside") });
+
+  assert.equal(packet.ok, false);
+  assert.ok(packet.issues.some((entry) => entry.code === "canonical_source_root_outside_repo"));
+});

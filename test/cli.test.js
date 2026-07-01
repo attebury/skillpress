@@ -33,3 +33,26 @@ test("status and doctor JSON commands run against an isolated empty workspace", 
   assert.equal(doctor.status, 0, doctor.stderr);
   assert.equal(JSON.parse(doctor.stdout).type, "skillpress_doctor");
 });
+
+test("sync JSON command installs a canonical skill into an isolated provider root", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "skillpress-cli-sync-"));
+  const cwd = path.join(root, "repo");
+  const homeDir = path.join(root, "home");
+  fs.mkdirSync(path.join(cwd, "agent-skills", "src", "runlane", "runlane-consumer"), { recursive: true });
+  fs.mkdirSync(homeDir, { recursive: true });
+  fs.writeFileSync(path.join(cwd, "agent-skills", "src", "runlane", "runlane-consumer", "SKILL.md"), "# Runlane Consumer\n");
+  const env = { ...process.env, HOME: homeDir };
+
+  const sync = spawnSync(process.execPath, [cli, "sync", "--json", "--provider", "codex", "--tool", "runlane"], {
+    cwd,
+    env,
+    encoding: "utf8"
+  });
+
+  assert.equal(sync.status, 0, sync.stderr || sync.stdout);
+  const packet = JSON.parse(sync.stdout);
+  assert.equal(packet.type, "skillpress_sync");
+  assert.equal(packet.summary.write_count, 1);
+  assert.equal(fs.existsSync(path.join(homeDir, ".codex", "skills", "runlane-consumer", "SKILL.md")), true);
+  assert.equal(fs.existsSync(path.join(cwd, "skillpress.manifest.json")), true);
+});

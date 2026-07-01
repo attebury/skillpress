@@ -33,27 +33,42 @@ agent surfaces, keep them current, and report drift.
 - Security, ownership, readiness, and stack-routing checks fail closed.
 - Provider differences live in target adapters, not divergent prose.
 
-## Bootstrap Product Shape
+## V1 Product Shape
 
-The first slice is read-only except for normal repository development files.
-It establishes:
+The v1 package-manager slice establishes:
 
 - `skillpress boundary --json` for stable ownership data.
 - Provider target modeling for Codex, agent-local roots, Cursor, and a
   deliberately unknown Claude Code placeholder.
 - Manifest validation for installed skills.
-- `skillpress status --json` and `skillpress doctor --json` foundation checks.
+- Canonical repo-owned skill source under `agent-skills/src/{tool}/{skill}/SKILL.md`.
+- Command contracts under `agent-skills/contracts/{tool}.commands.json`.
+- `skillpress sync --json` rendering canonical skills into provider roots.
+- `skillpress status --json` and `skillpress doctor --json` verification.
+
+Each sync render writes a generated header with:
+
+- `source_path`;
+- `source_hash`;
+- `generated_at`;
+- `target`;
+- `tool`;
+- `skill`.
 
 The verifier reports:
 
 - missing manifest-managed installed skills;
+- unmanaged installed skills when a manifest exists;
 - duplicate skill names across provider roots;
 - duplicate skill content conflicts;
 - stale or missing generated headers for manifest-managed installs;
-- malformed Markdown fences.
+- installed-cache drift from canonical source;
+- malformed Markdown fences;
+- policy drift for known dangerous skill guidance;
+- command-contract drift for Remogram, Runlane, and Topogram command snippets.
 
-`sync` remains out of scope until the read-only verifier is strong enough to
-detect drift before mutating provider caches.
+`sync` runs the same canonical policy and command checks before writing. Bad
+canonical source fails closed before provider caches are mutated.
 
 ## Manifest Boundary
 
@@ -75,19 +90,24 @@ segments. Provider roots are target caches, not canonical source trees.
 Short term, `promote-cli --with-skills` may delegate to Skillpress:
 
 ```bash
-skillpress sync --tool runlane
+skillpress sync --json --tool runlane
 ```
 
 Long term, closeout should compose two explicit steps:
 
 ```bash
 promote-cli runlane
-skillpress sync --tool runlane
+skillpress sync --json --tool runlane
 ```
 
 The tools share manifests, not internals. `promote-cli` writes tool integration
 state. Skillpress writes installed skill state. Runlane can read both for
 status and doctor output without becoming the owner of either boundary.
+
+Compatibility note: the `--with-skills` delegation is only a caller-side shim.
+Allowed reason: existing closeout flows may still call that flag while they
+migrate to explicit Skillpress sync. It must not make Skillpress responsible
+for npm linking, binary promotion, Runlane closeout, or forge lifecycle.
 
 ## Runlane Profile
 
