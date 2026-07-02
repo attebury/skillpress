@@ -145,6 +145,86 @@ function manifestEntryKey(entry) {
   return `${entry.provider}\0${entry.installed_path}`;
 }
 
+function normalizeRelativePath(value) {
+  return String(value ?? "").replace(/\\/g, "/").replace(/^\.\//, "");
+}
+
+function toolScopedPathMatches(value, { cwd, requestedTool, sourceState }) {
+  if (!value) {
+    return false;
+  }
+  const candidate = normalizeRelativePath(value);
+  return sourceState.roots.some((root) => {
+    if (root.layout !== "tool-scoped") {
+      return false;
+    }
+    const rootPath = normalizeRelativePath(path.relative(cwd, root.path));
+    const prefix = rootPath ? `${rootPath}/${requestedTool}` : requestedTool;
+    return candidate === prefix || candidate.startsWith(`${prefix}/`);
+  });
+}
+
+function createToolScope({ requestedTool, sourceState, manifestEntries, cwd }) {
+  if (!requestedTool) {
+    return null;
+  }
+  const canonicalByPath = sourceByPath(sourceState.sources);
+  const canonicalSkillNames = new Set(sourceState.sources.map((source) => source.skill));
+  const scopedManifestKeys = new Set();
+  for (const entry of manifestEntries) {
+    const source = entry.source_path ? canonicalByPath.get(entry.source_path) : null;
+    if (
+      source?.tool === requestedTool
+      || toolScopedPathMatches(entry.source_path, { cwd, requestedTool, sourceState })
+      || toolScopedPathMatches(entry.source_root_path, { cwd, requestedTool, sourceState })
+    ) {
+      scopedManifestKeys.add(manifestEntryKey(entry));
+    }
+  }
+  return {
+    requestedTool,
+    canonicalSkillNames,
+    scopedManifestKeys
+  };
+}
+
+function manifestEntryInScope(entry, toolScope) {
+  return !toolScope || toolScope.scopedManifestKeys.has(manifestEntryKey(entry));
+}
+
+function installedSkillInScope(skill, { toolScope, manifestByPath }) {
+  if (!toolScope) {
+    return true;
+  }
+  const key = `${skill.provider}\0${skill.path}`;
+  if (manifestByPath.has(key)) {
+    return toolScope.scopedManifestKeys.has(key);
+  }
+  return skill.generated_header.fields.tool === toolScope.requestedTool
+    || toolScope.canonicalSkillNames.has(skill.skill);
+}
+
+function inventoryIssueInScope(entry, toolScope) {
+  if (!toolScope) {
+    return true;
+  }
+  return entry.skill ? toolScope.canonicalSkillNames.has(entry.skill) : false;
+}
+
+function contractIssueInScope(entry, toolScope) {
+  if (!toolScope) {
+    return true;
+  }
+  if (entry.code === "command_contract_root_outside_repo") {
+    return true;
+  }
+  if (entry.tool) {
+    return entry.tool === toolScope.requestedTool;
+  }
+  const fileTool = entry.path ? path.basename(entry.path).replace(/\.commands\.json$/, "") : null;
+  return fileTool === toolScope.requestedTool;
+}
+
 function collectSourceIssues({ sourceState, contractState, policyPacks }) {
   const issues = [];
   for (const source of sourceState.sources) {
@@ -219,13 +299,19 @@ function collectAuxiliaryDrift({ source, manifestEntry, providerTarget }) {
   return issues;
 }
 
-function collectIssues({ inventory, manifestState, sourceState, contractState, policyPacks, cwd, homeDir }) {
+function collectIssues({ inventory, manifestState, sourceState, contractState, policyPacks, cwd, homeDir, toolScope }) {
   const issues = [];
-  const skills = inventory.flatMap((provider) => provider.skills);
-  const manifestEntries = manifestState.manifest?.entries ?? [];
+  const allSkills = inventory.flatMap((provider) => provider.skills);
+  const allManifestEntries = manifestState.manifest?.entries ?? [];
+  const allManifestByPath = new Map(allManifestEntries.map((entry) => [manifestEntryKey(entry), entry]));
+  const skills = allSkills.filter((skill) => installedSkillInScope(skill, {
+    toolScope,
+    manifestByPath: allManifestByPath
+  }));
+  const manifestEntries = allManifestEntries.filter((entry) => manifestEntryInScope(entry, toolScope));
   const manifestByPath = new Map(manifestEntries.map((entry) => [manifestEntryKey(entry), entry]));
   const canonicalByPath = sourceByPath(sourceState.sources);
-  const installedKeys = new Set(skills.map((skill) => `${skill.provider}\0${skill.path}`));
+  const installedKeys = new Set(allSkills.map((skill) => `${skill.provider}\0${skill.path}`));
   const providers = providerMap(inventory);
 
   for (const entry of manifestEntries) {
@@ -416,13 +502,32 @@ export function statusPacket(options = {}) {
   }
 
   const inventory = providers.map(inventoryProvider);
+  const manifestEntries = manifestState.manifest?.entries ?? [];
+  const toolScope = createToolScope({
+    requestedTool: options.tool ?? null,
+    sourceState,
+    manifestEntries,
+    cwd
+  });
+  const allManifestByPath = new Map(manifestEntries.map((entry) => [manifestEntryKey(entry), entry]));
+  const skills = inventory
+    .flatMap((provider) => provider.skills)
+    .filter((skill) => installedSkillInScope(skill, {
+      toolScope,
+      manifestByPath: allManifestByPath
+    }))
+    .map(({ content, ...skill }) => skill);
+  const scopedSkillCounts = skills.reduce((counts, skill) => {
+    counts.set(skill.provider, (counts.get(skill.provider) ?? 0) + 1);
+    return counts;
+  }, new Map());
   const issues = [
     ...providerIssues,
     ...runtimeConfig.issues,
     ...loadIssues,
-    ...inventory.flatMap((provider) => provider.issues ?? []),
+    ...inventory.flatMap((provider) => provider.issues ?? []).filter((entry) => inventoryIssueInScope(entry, toolScope)),
     ...sourceState.issues,
-    ...contractState.issues,
+    ...contractState.issues.filter((entry) => contractIssueInScope(entry, toolScope)),
     ...collectSourceIssues({
       sourceState,
       contractState,
@@ -435,10 +540,10 @@ export function statusPacket(options = {}) {
       contractState,
       policyPacks: runtimeConfig.config.policy_packs,
       cwd,
-      homeDir
+      homeDir,
+      toolScope
     })
   ];
-  const skills = inventory.flatMap((provider) => provider.skills).map(({ content, ...skill }) => skill);
   const errorCount = issues.filter((entry) => entry.severity === "error").length;
   const warningCount = issues.filter((entry) => entry.severity === "warning").length;
   const installedCount = skills.length;
@@ -450,7 +555,7 @@ export function statusPacket(options = {}) {
     status: errorCount > 0 ? "fail" : warningCount > 0 ? "drift" : "pass",
     providers: inventory.map(({ skills: providerSkills, ...provider }) => ({
       ...provider,
-      skill_count: providerSkills.length
+      skill_count: toolScope ? scopedSkillCounts.get(provider.id) ?? 0 : providerSkills.length
     })),
     manifest: {
       present: manifestState.present,

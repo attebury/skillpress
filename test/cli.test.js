@@ -77,6 +77,52 @@ test("sync JSON command installs a canonical skill into an isolated provider roo
   assert.equal(fs.existsSync(path.join(cwd, "skillpress.manifest.json")), true);
 });
 
+test("doctor --tool ignores unrelated global installed drift", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "skillpress-cli-tool-doctor-"));
+  const cwd = path.join(root, "repo");
+  const homeDir = path.join(root, "home");
+  fs.mkdirSync(path.join(cwd, "agent-skills", "src", "runlane", "runlane-consumer"), { recursive: true });
+  fs.mkdirSync(homeDir, { recursive: true });
+  fs.writeFileSync(path.join(cwd, "agent-skills", "src", "runlane", "runlane-consumer", "SKILL.md"), [
+    "---",
+    "name: runlane-consumer",
+    "description: Use Runlane facts.",
+    "---",
+    "",
+    "# Runlane Consumer",
+    ""
+  ].join("\n"));
+  const env = { ...process.env, HOME: homeDir };
+
+  const sync = spawnSync(process.execPath, [cli, "sync", "--json", "--provider", "codex", "--tool", "runlane"], {
+    cwd,
+    env,
+    encoding: "utf8"
+  });
+  assert.equal(sync.status, 0, sync.stderr || sync.stdout);
+
+  fs.mkdirSync(path.join(homeDir, ".codex", "skills", "remogram-consumer"), { recursive: true });
+  fs.mkdirSync(path.join(homeDir, ".agents", "skills", "remogram-consumer"), { recursive: true });
+  fs.writeFileSync(path.join(homeDir, ".codex", "skills", "remogram-consumer", "SKILL.md"), "# Remogram\n");
+  fs.writeFileSync(path.join(homeDir, ".agents", "skills", "remogram-consumer", "SKILL.md"), "# Remogram drift\n");
+
+  const scopedDoctor = spawnSync(process.execPath, [cli, "doctor", "--json", "--tool", "runlane"], {
+    cwd,
+    env,
+    encoding: "utf8"
+  });
+  assert.equal(scopedDoctor.status, 0, scopedDoctor.stderr || scopedDoctor.stdout);
+  assert.equal(JSON.parse(scopedDoctor.stdout).ok, true);
+
+  const globalDoctor = spawnSync(process.execPath, [cli, "doctor", "--json"], {
+    cwd,
+    env,
+    encoding: "utf8"
+  });
+  assert.equal(globalDoctor.status, 1, globalDoctor.stderr || globalDoctor.stdout);
+  assert.ok(JSON.parse(globalDoctor.stdout).findings.some((entry) => entry.code === "duplicate_skill_content_conflict"));
+});
+
 test("CLI accepts source layout, policy, config, and cursor provider options", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "skillpress-cli-config-"));
   const cwd = path.join(root, "repo");
