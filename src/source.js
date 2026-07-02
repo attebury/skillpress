@@ -6,6 +6,7 @@ import { parseSkillFrontmatter } from "./skill-lint.js";
 
 export const DEFAULT_SOURCE_ROOT = "agent-skills/src";
 export const DEFAULT_CONTRACT_ROOT = "agent-skills/contracts";
+const DEFAULT_SOURCE_LAYOUT = "tool-scoped";
 
 const SAFE_TOOL_ID = /^[A-Za-z0-9._-]+$/;
 
@@ -144,7 +145,7 @@ export function discoverSkillSources(options = {}) {
   const cwd = path.resolve(options.cwd ?? process.cwd());
   const configuredRoots = options.sourceRoots?.length
     ? options.sourceRoots
-    : [{ path: options.sourceRoot ?? DEFAULT_SOURCE_ROOT, layout: options.sourceLayout ?? "atteway" }];
+    : [{ path: options.sourceRoot ?? DEFAULT_SOURCE_ROOT, layout: options.sourceLayout ?? DEFAULT_SOURCE_LAYOUT }];
   let toolFilter = null;
   if (options.tool) {
     try {
@@ -154,7 +155,7 @@ export function discoverSkillSources(options = {}) {
         root: resolveSourceRoot({ cwd, sourceRoot: configuredRoots[0]?.path ?? DEFAULT_SOURCE_ROOT }),
         roots: configuredRoots.map((entry) => ({
           path: resolveSourceRoot({ cwd, sourceRoot: entry.path }),
-          layout: entry.layout ?? "atteway"
+          layout: entry.layout ?? DEFAULT_SOURCE_LAYOUT
         })),
         sources: [],
         issues: [{
@@ -171,7 +172,7 @@ export function discoverSkillSources(options = {}) {
   const issues = [];
   const roots = [];
 
-  function scanAttewayRoot(root, layout) {
+  function scanToolScopedRoot(root, layout) {
     const toolNames = fs.readdirSync(root, { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
       .map((entry) => entry.name)
@@ -275,7 +276,7 @@ export function discoverSkillSources(options = {}) {
 
   for (const sourceRoot of configuredRoots) {
     const root = resolveSourceRoot({ cwd, sourceRoot: sourceRoot.path });
-    const layout = sourceRoot.layout ?? "atteway";
+    const layout = sourceRoot.layout ?? DEFAULT_SOURCE_LAYOUT;
     roots.push({ path: root, layout });
     if (!isPathInside(root, cwd)) {
       issues.push({
@@ -295,8 +296,8 @@ export function discoverSkillSources(options = {}) {
       });
       continue;
     }
-    if (layout === "atteway") {
-      scanAttewayRoot(root, layout);
+    if (layout === "tool-scoped") {
+      scanToolScopedRoot(root, layout);
     } else {
       scanSkillDirectoryRoot(root, layout);
     }

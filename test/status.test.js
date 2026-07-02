@@ -117,7 +117,7 @@ test("status lints canonical sources before install", () => {
   const packet = statusPacket({
     cwd: fx.cwd,
     homeDir: fx.homeDir,
-    policyPacks: ["generic", "atteway"]
+    policyPacks: ["generic", "dogfood"]
   });
 
   assert.equal(packet.ok, false);

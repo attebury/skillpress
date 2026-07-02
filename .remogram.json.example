@@ -2,9 +2,9 @@
   "version": "1",
   "provider": "gitea-api",
   "remote": "origin",
-  "owner": "attebury",
+  "owner": "example",
   "repo": "skillpress",
-  "baseUrl": "http://localhost:3000",
+  "baseUrl": "https://forge.example",
   "write_commands": [
     "cr_open",
     "status_set",
@@ -14,4 +14,3 @@
     "cr_edit"
   ]
 }
-

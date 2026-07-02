@@ -3,4 +3,4 @@ coverage/
 .DS_Store
 .tmp/
 *.log
-
+.remogram.json

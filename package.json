@@ -5,12 +5,12 @@
   "license": "MIT",
   "type": "module",
   "files": [
-    "agent-skills/",
     "bin/",
     "docs/",
     "src/",
     "README.md",
-    "skillpress.config.json"
+    "LICENSE",
+    "SECURITY.md"
   ],
   "bin": {
     "skillpress": "./bin/skillpress.js"

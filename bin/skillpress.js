@@ -29,9 +29,9 @@ function readOptions(args, name) {
 function usage() {
   return [
     "skillpress boundary --json",
-    "skillpress status --json [--config <path>] [--manifest <path>] [--provider codex|agents|cursor|claude-code] [--tool <tool>] [--source-root <path>] [--source-layout auto|atteway|agent-skills|claude-skills] [--contract-root <path>] [--policy generic|atteway|none]",
-    "skillpress doctor --json [--config <path>] [--manifest <path>] [--provider codex|agents|cursor|claude-code] [--tool <tool>] [--source-root <path>] [--source-layout auto|atteway|agent-skills|claude-skills] [--contract-root <path>] [--policy generic|atteway|none]",
-    "skillpress sync --json [--config <path>] [--provider codex|agents|cursor|claude-code] [--tool <tool>] [--manifest <path>] [--source-root <path>] [--source-layout auto|atteway|agent-skills|claude-skills] [--contract-root <path>] [--policy generic|atteway|none] [--dry-run]"
+    "skillpress status --json [--config <path>] [--manifest <path>] [--provider codex|agents|cursor|claude-code] [--tool <tool>] [--source-root <path>] [--source-layout auto|tool-scoped|agent-skills|claude-skills] [--contract-root <path>] [--policy generic|dogfood|none]",
+    "skillpress doctor --json [--config <path>] [--manifest <path>] [--provider codex|agents|cursor|claude-code] [--tool <tool>] [--source-root <path>] [--source-layout auto|tool-scoped|agent-skills|claude-skills] [--contract-root <path>] [--policy generic|dogfood|none]",
+    "skillpress sync --json [--config <path>] [--provider codex|agents|cursor|claude-code] [--tool <tool>] [--manifest <path>] [--source-root <path>] [--source-layout auto|tool-scoped|agent-skills|claude-skills] [--contract-root <path>] [--policy generic|dogfood|none] [--dry-run]"
   ].join("\n");
 }
 
