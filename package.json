@@ -25,7 +25,8 @@
     "src/",
     "README.md",
     "LICENSE",
-    "SECURITY.md"
+    "SECURITY.md",
+    "llms.txt"
   ],
   "bin": {
     "skillpress": "./bin/skillpress.js"

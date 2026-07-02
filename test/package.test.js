@@ -23,7 +23,8 @@ test("package manifest explicitly limits published runtime files", () => {
     "src/",
     "README.md",
     "LICENSE",
-    "SECURITY.md"
+    "SECURITY.md",
+    "llms.txt"
   ]);
   assert.equal(pkg.files.includes("agent-skills/"), false);
   assert.equal(pkg.files.includes("examples/"), false);
@@ -52,6 +53,7 @@ test("npm pack dry-run excludes examples and local source caches", () => {
   assert.ok(files.includes("README.md"));
   assert.ok(files.includes("LICENSE"));
   assert.ok(files.includes("SECURITY.md"));
+  assert.ok(files.includes("llms.txt"));
   assert.equal(files.some((entry) => entry.startsWith("src/")), true);
   assert.equal(files.some((entry) => entry.startsWith("bin/")), true);
   assert.equal(files.some((entry) => entry.startsWith("docs/")), true);

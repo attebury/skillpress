@@ -1,0 +1,34 @@
+# Skillpress
+
+> Skillpress is a package manager for portable Agent Skills directories. It syncs canonical skill sources to Codex, Claude Code, Cursor project rules, and agent-local skill roots, then reports drift.
+
+Skillpress is not a skill authoring system, a CLI promoter, a workflow orchestrator, or a proof/evidence system. Product repositories own their skills; Skillpress renders, installs, manifests, and verifies provider caches.
+
+## Start Here
+
+- [README](https://raw.githubusercontent.com/attebury/skillpress/main/README.md): Install, quickstart, source layouts, provider targets, manifest shape, and development commands.
+- [Operating model](https://raw.githubusercontent.com/attebury/skillpress/main/docs/operating-model.md): Source and target model, verification rules, and public release constraints.
+- [Boundary](https://raw.githubusercontent.com/attebury/skillpress/main/docs/decisions/skillpress-boundary.md): Ownership boundary, excluded responsibilities, and product invariants.
+
+## Source
+
+- [CLI entrypoint](https://raw.githubusercontent.com/attebury/skillpress/main/bin/skillpress.js): Command routing for boundary, status, doctor, and sync.
+- [Source discovery](https://raw.githubusercontent.com/attebury/skillpress/main/src/source.js): Agent Skills directory discovery, hashing, and source-tree safety checks.
+- [Provider targets](https://raw.githubusercontent.com/attebury/skillpress/main/src/providers.js): Provider-specific install roots for Codex, agent-local roots, Claude Code, and Cursor.
+- [Sync](https://raw.githubusercontent.com/attebury/skillpress/main/src/sync.js): Rendering canonical skills into provider targets and writing install manifests.
+- [Status](https://raw.githubusercontent.com/attebury/skillpress/main/src/status.js): Installed-vs-expected reporting and drift detection.
+- [Doctor](https://raw.githubusercontent.com/attebury/skillpress/main/src/doctor.js): Aggregated status and policy findings.
+- [Skill lint](https://raw.githubusercontent.com/attebury/skillpress/main/src/skill-lint.js): Generic Agent Skills linting and optional dogfood policy rules.
+- [Contracts](https://raw.githubusercontent.com/attebury/skillpress/main/src/contracts.js): Command contract loading for validating command references.
+- [Manifest](https://raw.githubusercontent.com/attebury/skillpress/main/src/manifest.js): Install manifest validation, v1 reads, and v2 writes.
+
+## Release
+
+- [Release process](https://raw.githubusercontent.com/attebury/skillpress/main/docs/release.md): Public export, GitHub push, beta npm publish, and smoke install steps.
+- [Security policy](https://raw.githubusercontent.com/attebury/skillpress/main/SECURITY.md): Supported security surface and reporting path.
+- [Package metadata](https://raw.githubusercontent.com/attebury/skillpress/main/package.json): Runtime package metadata, npm package allowlist, and test scripts.
+
+## Optional
+
+- [Runlane example](https://github.com/attebury/skillpress/tree/main/examples/runlane): Example tool-scoped source and optional dogfood policy configuration; not shipped in the npm package.
+- [Remogram example](https://github.com/attebury/skillpress/tree/main/examples/remogram): Example command contracts and policy fixtures; not shipped in the npm package.

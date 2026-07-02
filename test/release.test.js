@@ -56,6 +56,7 @@ test("release docs describe beta export flow", () => {
 test("new public release files avoid exact local secret and forge markers", () => {
   const files = [
     "README.md",
+    "llms.txt",
     "docs/release.md",
     "scripts/export-public-main.sh",
     ".github/workflows/test.yml"
