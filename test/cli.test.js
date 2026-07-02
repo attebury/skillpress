@@ -77,6 +77,48 @@ test("sync JSON command installs a canonical skill into an isolated provider roo
   assert.equal(fs.existsSync(path.join(cwd, "skillpress.manifest.json")), true);
 });
 
+test("CLI sync can add codex after cursor manifest normalization", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "skillpress-cli-sync-roundtrip-"));
+  const cwd = path.join(root, "repo");
+  const homeDir = path.join(root, "home");
+  fs.mkdirSync(path.join(cwd, "agent-skills", "src", "remogram", "remogram-consumer"), { recursive: true });
+  fs.mkdirSync(homeDir, { recursive: true });
+  fs.writeFileSync(path.join(cwd, "agent-skills", "src", "remogram", "remogram-consumer", "SKILL.md"), [
+    "---",
+    "name: remogram-consumer",
+    "description: Use Remogram facts.",
+    "---",
+    "",
+    "# Remogram Consumer",
+    ""
+  ].join("\n"));
+  const env = { ...process.env, HOME: homeDir };
+
+  const cursorSync = spawnSync(process.execPath, [cli, "sync", "--json", "--provider", "cursor", "--tool", "remogram"], {
+    cwd,
+    env,
+    encoding: "utf8"
+  });
+  assert.equal(cursorSync.status, 0, cursorSync.stderr || cursorSync.stdout);
+
+  const codexSync = spawnSync(process.execPath, [cli, "sync", "--json", "--provider", "codex", "--tool", "remogram"], {
+    cwd,
+    env,
+    encoding: "utf8"
+  });
+  assert.equal(codexSync.status, 0, codexSync.stderr || codexSync.stdout);
+
+  const manifest = JSON.parse(fs.readFileSync(path.join(cwd, "skillpress.manifest.json"), "utf8"));
+  assert.deepEqual(manifest.entries.map((entry) => entry.provider).sort(), ["codex", "cursor"]);
+
+  const doctor = spawnSync(process.execPath, [cli, "doctor", "--json", "--tool", "remogram"], {
+    cwd,
+    env,
+    encoding: "utf8"
+  });
+  assert.equal(doctor.status, 0, doctor.stderr || doctor.stdout);
+});
+
 test("doctor --tool ignores unrelated global installed drift", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "skillpress-cli-tool-doctor-"));
   const cwd = path.join(root, "repo");

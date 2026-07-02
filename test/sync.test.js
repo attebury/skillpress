@@ -235,3 +235,33 @@ test("cursor sync renders an mdc rule and warns about auxiliary files", () => {
   assert.match(content, /^---\ndescription: "Use Runlane facts\."\nalwaysApply: false\n---/);
   assert.ok(packet.issues.some((entry) => entry.code === "cursor_auxiliary_files_ignored"));
 });
+
+test("sync merges second provider entries after null-normalized manifest read", () => {
+  const fx = fixture();
+  writeFile(sourcePath(fx, "remogram", "remogram-consumer"), skillMarkdown("remogram-consumer", "Use Remogram facts."));
+
+  const cursor = syncPacket({
+    cwd: fx.cwd,
+    homeDir: fx.homeDir,
+    provider: "cursor",
+    tool: "remogram",
+    generatedAt: GENERATED_AT
+  });
+  assert.equal(cursor.ok, true);
+
+  const codex = syncPacket({
+    cwd: fx.cwd,
+    homeDir: fx.homeDir,
+    provider: "codex",
+    tool: "remogram",
+    generatedAt: GENERATED_AT
+  });
+  assert.equal(codex.ok, true);
+
+  const manifest = JSON.parse(fs.readFileSync(path.join(fx.cwd, "skillpress.manifest.json"), "utf8"));
+  assert.deepEqual(manifest.entries.map((entry) => entry.provider).sort(), ["codex", "cursor"]);
+  assert.ok(manifest.entries.every((entry) => entry.source_layout === "tool-scoped"));
+
+  const status = statusPacket({ cwd: fx.cwd, homeDir: fx.homeDir, tool: "remogram" });
+  assert.equal(status.ok, true);
+});
