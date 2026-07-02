@@ -1,0 +1,45 @@
+{
+  "name": "skillpress",
+  "version": "0.1.0-beta.0",
+  "description": "Package manager for portable Agent Skills directories across agent surfaces.",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/attebury/skillpress.git"
+  },
+  "bugs": {
+    "url": "https://github.com/attebury/skillpress/issues"
+  },
+  "homepage": "https://github.com/attebury/skillpress#readme",
+  "keywords": [
+    "agent-skills",
+    "skills",
+    "codex",
+    "claude-code",
+    "cursor"
+  ],
+  "files": [
+    "bin/",
+    "docs/",
+    "src/",
+    "README.md",
+    "LICENSE",
+    "SECURITY.md"
+  ],
+  "bin": {
+    "skillpress": "./bin/skillpress.js"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "check": "npm test",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}
