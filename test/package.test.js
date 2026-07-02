@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -9,6 +10,12 @@ const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
 test("package manifest explicitly limits published runtime files", () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(repoRoot, "package.json"), "utf8"));
+
+  assert.equal(pkg.version, "0.1.0-beta.0");
+  assert.equal(pkg.repository.url, "git+https://github.com/attebury/skillpress.git");
+  assert.equal(pkg.bugs.url, "https://github.com/attebury/skillpress/issues");
+  assert.equal(pkg.homepage, "https://github.com/attebury/skillpress#readme");
+  assert.ok(pkg.keywords.includes("agent-skills"));
 
   assert.deepEqual(pkg.files, [
     "bin/",
@@ -21,6 +28,8 @@ test("package manifest explicitly limits published runtime files", () => {
   assert.equal(pkg.files.includes("agent-skills/"), false);
   assert.equal(pkg.files.includes("examples/"), false);
   assert.equal(pkg.files.includes("test/"), false);
+  assert.equal(pkg.files.includes("scripts/"), false);
+  assert.equal(pkg.files.includes(".github/"), false);
   assert.equal(pkg.files.includes(".remogram.json"), false);
   assert.equal(pkg.files.includes("skillpress.config.json"), false);
 });
@@ -28,7 +37,11 @@ test("package manifest explicitly limits published runtime files", () => {
 test("npm pack dry-run excludes examples and local source caches", () => {
   const result = spawnSync("npm", ["pack", "--dry-run", "--json"], {
     cwd: repoRoot,
-    encoding: "utf8"
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      NPM_CONFIG_CACHE: process.env.NPM_CONFIG_CACHE ?? path.join(os.tmpdir(), "skillpress-npm-cache")
+    }
   });
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
@@ -45,6 +58,9 @@ test("npm pack dry-run excludes examples and local source caches", () => {
   assert.equal(files.some((entry) => entry.startsWith("examples/")), false);
   assert.equal(files.some((entry) => entry.startsWith("agent-skills/")), false);
   assert.equal(files.some((entry) => entry.startsWith("test/")), false);
+  assert.equal(files.some((entry) => entry.startsWith("scripts/")), false);
+  assert.equal(files.some((entry) => entry.startsWith(".github/")), false);
   assert.equal(files.includes(".remogram.json"), false);
   assert.equal(files.includes("skillpress.config.json"), false);
+  assert.equal(files.includes("skillpress.manifest.json"), false);
 });

@@ -10,6 +10,13 @@ skills, install tool binaries, run lane orchestration, or own workflow proof.
 It manages Agent Skills-style directories; it does not define a proprietary
 skill format.
 
+## Install
+
+```bash
+npm install -g skillpress@beta
+skillpress boundary --json
+```
+
 ## Quickstart
 
 Create a generic Agent Skills source root:
