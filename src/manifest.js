@@ -30,6 +30,13 @@ function requireString(value, field, { max = 512 } = {}) {
   return value;
 }
 
+function validateOptionalString(value, field, options = {}) {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  return requireString(value, field, options);
+}
+
 function validateSafeRelativePath(value, field) {
   const raw = requireString(value, field);
   if (path.isAbsolute(raw) || raw.includes("\0")) {
@@ -141,9 +148,7 @@ export function validateManifestEntry(entry, context = {}) {
   const providerTarget = providerById(provider, { cwd, homeDir });
   const sourcePath = validateOptionalSafeRelativePath(entry.source_path, "source_path");
   const sourceRootPath = validateOptionalSafeRelativePath(entry.source_root_path, "source_root_path");
-  const sourceRepo = entry.source_repo === undefined
-    ? undefined
-    : requireString(entry.source_repo, "source_repo", { max: 256 });
+  const sourceRepo = validateOptionalString(entry.source_repo, "source_repo", { max: 256 });
   if (sourceRepo !== undefined && (!SAFE_SOURCE_REPO.test(sourceRepo) || sourceRepo.includes(".."))) {
     throw manifestError("manifest_invalid_source_repo", "source_repo must be a safe repository identifier", {
       source_repo: sourceRepo
@@ -164,7 +169,7 @@ export function validateManifestEntry(entry, context = {}) {
       provider
     });
   }
-  const version = entry.version === undefined ? null : requireString(entry.version, "version", { max: 120 });
+  const version = validateOptionalString(entry.version, "version", { max: 120 }) ?? null;
   if (version !== null && !SAFE_VERSION.test(version)) {
     throw manifestError("manifest_invalid_version", "version contains unsafe characters", { version });
   }
@@ -191,7 +196,7 @@ export function validateManifestEntry(entry, context = {}) {
     installed_root: installedRoot,
     files,
     version,
-    target: entry.target === undefined ? provider : requireString(entry.target, "target", { max: 80 })
+    target: validateOptionalString(entry.target, "target", { max: 80 }) ?? provider
   };
 }
 

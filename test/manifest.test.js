@@ -77,6 +77,75 @@ test("manifest validation treats legacy source_layout as metadata", () => {
   assert.equal(manifest.entries[0].source_layout, "legacy-private");
 });
 
+test("manifest validation accepts null optional string metadata", () => {
+  const fx = fixture();
+  const installedPath = path.join(fx.homeDir, ".codex", "skills", "runlane-consumer", "SKILL.md");
+  const manifest = validateManifest({
+    schema: MANIFEST_SCHEMA,
+    version: MANIFEST_VERSION,
+    entries: [{
+      skill: "runlane-consumer",
+      provider: "codex",
+      source_path: "agent-skills/src/runlane/runlane-consumer/SKILL.md",
+      source_repo: null,
+      source_hash: HASH_A,
+      version: null,
+      target: null,
+      installed_path: installedPath
+    }]
+  }, fx);
+
+  assert.equal(manifest.entries[0].source_repo, null);
+  assert.equal(manifest.entries[0].version, null);
+  assert.equal(manifest.entries[0].target, "codex");
+});
+
+test("manifest validation keeps optional string fields fail-closed", () => {
+  const fx = fixture();
+  const installedPath = path.join(fx.homeDir, ".codex", "skills", "runlane-consumer", "SKILL.md");
+  const base = {
+    schema: MANIFEST_SCHEMA,
+    version: MANIFEST_VERSION,
+    entries: [{
+      skill: "runlane-consumer",
+      provider: "codex",
+      source_path: "agent-skills/src/runlane/runlane-consumer/SKILL.md",
+      source_hash: HASH_A,
+      installed_path: installedPath
+    }]
+  };
+
+  assert.throws(() => validateManifest({
+    ...base,
+    entries: [{
+      ...base.entries[0],
+      source_path: null,
+      source_repo: null
+    }]
+  }, fx), /source_path or source_repo/);
+  assert.throws(() => validateManifest({
+    ...base,
+    entries: [{
+      ...base.entries[0],
+      source_repo: ""
+    }]
+  }, fx), /source_repo/);
+  assert.throws(() => validateManifest({
+    ...base,
+    entries: [{
+      ...base.entries[0],
+      source_repo: "../repo"
+    }]
+  }, fx), /source_repo/);
+  assert.throws(() => validateManifest({
+    ...base,
+    entries: [{
+      ...base.entries[0],
+      version: "bad version"
+    }]
+  }, fx), /version/);
+});
+
 test("manifest validation fails closed on unsafe source and target paths", () => {
   const fx = fixture();
   const validInstalledPath = path.join(fx.homeDir, ".codex", "skills", "runlane-consumer", "SKILL.md");
