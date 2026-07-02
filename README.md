@@ -1,14 +1,50 @@
 # Skillpress
 
-Skillpress is the package manager for agent guidance. It installs the right
-skills onto the right IDE and agent surfaces, keeps those installed caches
+Skillpress is a package manager for agent guidance. It installs the right
+Agent Skills onto the right IDE and agent surfaces, keeps installed caches
 fresh, and reports drift.
 
-Skillpress owns sync and availability for provider skill roots such as Codex,
-Cursor, Claude Code, and agent-local skill roots. It does not author the
-skills, promote CLI binaries, run lane orchestration, or own workflow proof.
+Skillpress owns skill sync and availability for provider targets such as
+Codex, Claude Code, Cursor, and agent-local skill roots. It does not author
+skills, install tool binaries, run lane orchestration, or own workflow proof.
 It manages Agent Skills-style directories; it does not define a proprietary
 skill format.
+
+## Quickstart
+
+Create a generic Agent Skills source root:
+
+```text
+skills/{skill}/
+  SKILL.md
+  scripts/
+  references/
+  assets/
+```
+
+Use a config like:
+
+```json
+{
+  "source_roots": [
+    { "path": "skills", "layout": "agent-skills" }
+  ],
+  "policy_packs": ["generic"],
+  "providers": ["codex", "claude-code", "cursor"]
+}
+```
+
+Then sync or inspect:
+
+```bash
+skillpress status --json --config skillpress.config.json
+skillpress doctor --json --config skillpress.config.json
+skillpress sync --json --config skillpress.config.json --provider codex
+skillpress sync --json --source-root skills --source-layout agent-skills
+```
+
+With no config, Skillpress looks for `agent-skills/src` using the
+`tool-scoped` layout and enables only the `generic` policy pack.
 
 ## Commands
 
@@ -23,35 +59,27 @@ skillpress sync --json --provider codex --tool runlane
 policy, and manifest filters:
 
 ```bash
-skillpress status --json --config skillpress.config.json
 skillpress status --json --manifest skillpress.manifest.json
 skillpress doctor --json --provider codex --tool remogram
 skillpress sync --json --provider cursor --tool runlane
 skillpress sync --json --provider claude-code --tool runlane
 skillpress sync --json --tool remogram --dry-run
-skillpress sync --json --source-root skills --source-layout agent-skills
-skillpress doctor --json --policy generic,atteway
+skillpress doctor --json --policy generic
 ```
 
-By default canonical source is read from `agent-skills/src` and command
-contracts are read from `agent-skills/contracts`. A `skillpress.config.json`
-can override source roots, provider defaults, policy packs, and contract root.
+Supported source layouts are `auto`, `tool-scoped`, `agent-skills`, and
+`claude-skills`.
 
-```json
-{
-  "source_roots": [
-    { "path": "agent-skills/src", "layout": "atteway" }
-  ],
-  "contract_root": "agent-skills/contracts",
-  "policy_packs": ["generic", "atteway"],
-  "providers": ["codex", "agents", "cursor", "claude-code"]
-}
+## Source Layouts
+
+Generic Agent Skills roots use one directory per skill:
+
+```text
+skills/{skill}/SKILL.md
+.claude/skills/{skill}/SKILL.md
 ```
 
-## Canonical Source
-
-Author skill prose once under a repo-owned Agent Skills directory. The Atteway
-convention is:
+Tool-scoped sources support multi-tool repositories:
 
 ```text
 agent-skills/src/{tool}/{skill}/
@@ -62,12 +90,8 @@ agent-skills/src/{tool}/{skill}/
 agent-skills/contracts/{tool}.commands.json
 ```
 
-Generic Agent Skills roots are also supported:
-
-```text
-skills/{skill}/SKILL.md
-.claude/skills/{skill}/SKILL.md
-```
+`auto` maps `.claude/skills` to `claude-skills`, maps `agent-skills/src` to
+`tool-scoped`, and otherwise uses `agent-skills`.
 
 Installed roots are targets only:
 
@@ -78,15 +102,47 @@ Installed roots are targets only:
 .cursor/rules/skillpress/{skill}.mdc
 ```
 
-Directory providers receive the full skill directory. Cursor receives a rendered
-project rule because Cursor's first-class project surface is `.cursor/rules`.
-If a Cursor target has auxiliary skill files, `sync` and `status` warn that
-Cursor cannot consume those files directly.
+Directory providers receive the full skill directory. Cursor receives a
+rendered project rule because Cursor's first-class project surface is
+`.cursor/rules`. If a Cursor target has auxiliary skill files, `sync` and
+`status` warn that Cursor cannot consume those files directly.
 
 Each installed entrypoint is rendered with a generated header recording
 `source_path`, `source_hash`, `skill_md_hash`, `source_tree_hash`,
 `generated_at`, `target`, `tool`, and `skill`. Do not edit installed provider
 roots as canonical source.
+
+## Dogfood Policy Pack
+
+The optional `dogfood` policy pack is not a source layout. It adds safety
+checks for repos exercising local toolchains and lane workflows:
+
+```json
+{
+  "source_roots": [
+    { "path": "agent-skills/src", "layout": "tool-scoped" }
+  ],
+  "contract_root": "agent-skills/contracts",
+  "policy_packs": ["generic", "dogfood"]
+}
+```
+
+The pack rejects missing-check waivers, lane `npm link`, hardcoded
+`origin/main`, stale `remogram cr ...` commands, and unjustified fallback or
+shim language. External users can run the `generic` pack without inheriting
+dogfood rules.
+
+## Examples
+
+Runlane and Remogram example projects live under `examples/runlane` and
+`examples/remogram`. They demonstrate tool-scoped sources, command contracts,
+and the optional dogfood policy pack. Examples are repo documentation and test
+fixtures; they are excluded from the npm package.
+
+Dogfood forge identity is local runtime config. Keep machine-local forge and
+tool config ignored. Tracked examples may provide `.example` templates, but
+runtime credentials and private forge identity must stay outside the public
+package.
 
 ## Manifest Shape
 
@@ -106,7 +162,7 @@ The manifest is versioned. Version 2 records both entrypoint and tree facts:
       "skill_md_hash": "sha256:...",
       "source_tree_hash": "sha256:...",
       "source_commit": "b4c390d...",
-      "source_layout": "atteway",
+      "source_layout": "tool-scoped",
       "installed_path": "~/.codex/skills/runlane-consumer/SKILL.md",
       "installed_root": "~/.codex/skills/runlane-consumer",
       "files": ["SKILL.md", "scripts/verify.js"]
@@ -115,10 +171,9 @@ The manifest is versioned. Version 2 records both entrypoint and tree facts:
 }
 ```
 
-Each entry must identify the skill, provider target, source path or source
-repo, a source revision/hash, and the installed entrypoint path. Unsafe paths,
-unknown providers, and paths outside the provider root fail closed. Version 1
-manifests remain readable for status and doctor; the next sync writes version 2.
+Version 1 manifests remain readable for status and doctor; the next sync writes
+version 2. Historical `source_layout` metadata remains readable, but Skillpress
+validates configured source layouts against the current public layout list.
 
 ## Verification
 
@@ -135,38 +190,12 @@ manifests remain readable for status and doctor; the next sync writes version 2.
 - policy drift from enabled policy packs;
 - command names missing from configured `*.commands.json` contracts.
 
-Policy packs are split:
-
-- `generic`: Agent Skills shape, Markdown, references, duplicate/drift checks,
-  and configured command contracts.
-- `atteway`: dogfood missing-check waivers, lane `npm link`, hardcoded
-  `origin/main`, stale `remogram cr ...` commands, and unjustified fallback
-  language.
-
 ## Provider Targets
 
 - `codex`: `~/.codex/skills/{skill}/SKILL.md`
 - `agents`: `~/.agents/skills/{skill}/SKILL.md`
 - `claude-code`: `~/.claude/skills/{skill}/SKILL.md`
 - `cursor`: `.cursor/rules/skillpress/{skill}.mdc`
-
-## Promotion Composition
-
-Skillpress promotes skills only. `promote-cli` promotes CLI binaries only.
-Short term, `promote-cli --with-skills` may shell out to:
-
-```bash
-skillpress sync --json --tool runlane
-```
-
-Long term, closeout flows should call the two boundaries explicitly:
-
-```bash
-promote-cli runlane
-skillpress sync --json --tool runlane
-```
-
-The tools may share manifest facts, but neither imports the other's internals.
 
 ## Development
 

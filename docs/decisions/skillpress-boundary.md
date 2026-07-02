@@ -12,12 +12,12 @@ agent surfaces, keep them current, and report drift.
 - Installed skill manifests: what is installed, from where, at what
   version or sha, and for which target.
 - `sync`, `status`, and `doctor` checks for skill freshness.
-- Pins from installed skills to promoted tool versions.
+- Source metadata that lets installed skills be tied back to tool versions.
 
 ## Does Not Own
 
 - Skill authoring. Product repos own their skill prose and contracts.
-- CLI binary promotion. `promote-cli` owns binary promotion and npm/link flows.
+- Tool binary installation.
 - Lane orchestration, handoffs, or closeout. Runlane owns those.
 - Workflow proof or SDLC authority. Topogram owns those.
 - Evidence replay or attestation. Chronogram and Attegram own those.
@@ -42,9 +42,9 @@ The package-manager slice establishes:
   Cursor project rules.
 - Manifest validation for installed skills, including legacy v1 reads and v2
   writes.
-- Canonical repo-owned Agent Skills directories under
-  `agent-skills/src/{tool}/{skill}/` by Atteway convention, plus generic
-  `skills/{skill}/` and `.claude/skills/{skill}/` source layouts.
+- Canonical repo-owned Agent Skills directories under generic
+  `skills/{skill}/`, `.claude/skills/{skill}/`, or tool-scoped
+  `agent-skills/src/{tool}/{skill}/` source layouts.
 - Optional command contracts under `agent-skills/contracts/{tool}.commands.json`
   or any configured `*.commands.json` file.
 - `skillpress sync --json` rendering canonical skill directories into provider
@@ -86,9 +86,9 @@ The verifier reports:
 `sync` runs the same canonical policy and command checks before writing. Bad
 canonical source fails closed before provider caches are mutated.
 
-Generic checks and Atteway checks are distinct. External users can run the
-generic pack without inheriting Atteway dogfood rules. Atteway repos enable the
-Atteway pack for missing-check waivers, lane `npm link`, hardcoded
+Generic checks and dogfood checks are distinct. External users can run the
+generic pack without inheriting tool-dogfood rules. Dogfood repos enable the
+dogfood policy pack for missing-check waivers, lane `npm link`, hardcoded
 `origin/main`, stale Remogram `cr` commands, and unjustified fallback/shim
 language.
 
@@ -109,30 +109,6 @@ skill authoring format and does not own the source prose. Each entry records:
 
 Manifest paths fail closed when they escape the provider root or use unsafe
 segments. Provider roots are target caches, not canonical source trees.
-
-## Promote-CLI Delegation
-
-Short term, `promote-cli --with-skills` may delegate to Skillpress:
-
-```bash
-skillpress sync --json --tool runlane
-```
-
-Long term, closeout should compose two explicit steps:
-
-```bash
-promote-cli runlane
-skillpress sync --json --tool runlane
-```
-
-The tools share manifests, not internals. `promote-cli` writes tool integration
-state. Skillpress writes installed skill state. Runlane can read both for
-status and doctor output without becoming the owner of either boundary.
-
-Compatibility note: the `--with-skills` delegation is only a caller-side shim.
-Allowed reason: existing closeout flows may still call that flag while they
-migrate to explicit Skillpress sync. It must not make Skillpress responsible
-for npm linking, binary promotion, Runlane closeout, or forge lifecycle.
 
 ## Runlane Profile
 

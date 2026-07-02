@@ -10,7 +10,6 @@ test("boundary packet defines Skillpress ownership and exclusions", () => {
   assert.equal(packet.boundary.product, "skillpress");
   assert.ok(packet.boundary.owns.includes("Install and sync skills to provider surfaces"));
   assert.ok(packet.boundary.does_not_own.includes("Skill authoring"));
-  assert.ok(packet.boundary.does_not_own.includes("CLI binary promotion"));
+  assert.ok(packet.boundary.does_not_own.includes("Tool binary installation"));
   assert.ok(packet.boundary.invariants.includes("Installed provider roots are caches"));
 });
-

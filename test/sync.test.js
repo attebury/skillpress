@@ -68,6 +68,7 @@ test("sync renders canonical skills into installable provider roots and updates 
   assert.ok(manifest.entries.some((entry) => entry.provider === "codex" && entry.installed_path.startsWith("~/")));
   assert.ok(manifest.entries.some((entry) => entry.provider === "claude-code" && entry.installed_path.startsWith("~/")));
   assert.ok(manifest.entries.some((entry) => entry.provider === "cursor" && entry.installed_path === ".cursor/rules/skillpress/runlane-consumer.mdc"));
+  assert.ok(manifest.entries.every((entry) => entry.source_layout === "tool-scoped"));
   assert.ok(manifest.entries.every((entry) => entry.source_tree_hash?.startsWith("sha256:")));
 
   const status = statusPacket({ cwd: fx.cwd, homeDir: fx.homeDir });
@@ -75,6 +76,45 @@ test("sync renders canonical skills into installable provider roots and updates 
   assert.equal(status.status, "pass");
   assert.equal(status.summary.source_drift_count, 0);
   assert.equal(status.summary.conflict_count, 0);
+});
+
+test("auto maps agent-skills/src to tool-scoped", () => {
+  const fx = fixture();
+  writeFile(sourcePath(fx), skillMarkdown());
+
+  const packet = syncPacket({
+    cwd: fx.cwd,
+    homeDir: fx.homeDir,
+    provider: "codex",
+    tool: "runlane",
+    sourceRoot: "agent-skills/src",
+    sourceLayout: "auto",
+    generatedAt: GENERATED_AT
+  });
+
+  assert.equal(packet.ok, true);
+  assert.equal(packet.source_roots[0].layout, "tool-scoped");
+  const manifest = JSON.parse(fs.readFileSync(path.join(fx.cwd, "skillpress.manifest.json"), "utf8"));
+  assert.equal(manifest.entries[0].source_layout, "tool-scoped");
+});
+
+test("generic Agent Skills source root syncs", () => {
+  const fx = fixture();
+  writeFile(path.join(fx.cwd, "skills", "alpha", "SKILL.md"), skillMarkdown("alpha", "Alpha skill."));
+
+  const packet = syncPacket({
+    cwd: fx.cwd,
+    homeDir: fx.homeDir,
+    provider: "codex",
+    sourceRoot: "skills",
+    sourceLayout: "agent-skills",
+    generatedAt: GENERATED_AT
+  });
+
+  assert.equal(packet.ok, true);
+  assert.equal(fs.existsSync(path.join(fx.homeDir, ".codex", "skills", "alpha", "SKILL.md")), true);
+  const manifest = JSON.parse(fs.readFileSync(path.join(fx.cwd, "skillpress.manifest.json"), "utf8"));
+  assert.equal(manifest.entries[0].source_layout, "agent-skills");
 });
 
 test("sync dry-run reports writes without mutating roots or manifest", () => {
@@ -131,7 +171,7 @@ test("sync refuses canonical skills that violate policy before writing", () => {
     homeDir: fx.homeDir,
     provider: "codex",
     tool: "remogram",
-    policyPacks: ["generic", "atteway"],
+    policyPacks: ["generic", "dogfood"],
     generatedAt: GENERATED_AT
   });
 
@@ -139,6 +179,32 @@ test("sync refuses canonical skills that violate policy before writing", () => {
   assert.equal(packet.summary.write_count, 0);
   assert.ok(packet.issues.some((entry) => entry.code === "policy_missing_pending_check_waiver_forbidden"));
   assert.equal(fs.existsSync(path.join(fx.homeDir, ".codex", "skills", "remogram-dogfood", "SKILL.md")), false);
+});
+
+test("dogfood policy rules are opt-in", () => {
+  const fx = fixture();
+  writeFile(sourcePath(fx, "remogram", "remogram-dogfood"), [
+    "---",
+    "name: remogram-dogfood",
+    "description: Remogram dogfood overlay.",
+    "---",
+    "",
+    "# Remogram Dogfood",
+    "",
+    "Dogfood lanes may set allow_missing_checks before merge."
+  ].join("\n"));
+
+  const packet = syncPacket({
+    cwd: fx.cwd,
+    homeDir: fx.homeDir,
+    provider: "codex",
+    tool: "remogram",
+    policyPacks: ["generic"],
+    generatedAt: GENERATED_AT
+  });
+
+  assert.equal(packet.ok, true);
+  assert.equal(fs.existsSync(path.join(fx.homeDir, ".codex", "skills", "remogram-dogfood", "SKILL.md")), true);
 });
 
 test("sync copies full skill directories for skill-directory providers", () => {

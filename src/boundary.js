@@ -8,7 +8,7 @@ export const SKILLPRESS_BOUNDARY = Object.freeze({
     "Provider-specific install layout",
     "Installed skill manifest with source path, source tree hash, version, sha, and target",
     "Skill freshness status and drift doctor",
-    "Pins from skills to promoted tool versions"
+    "Source metadata that ties installed skills back to tool versions"
   ],
   provider_targets: [
     "codex",
@@ -19,7 +19,7 @@ export const SKILLPRESS_BOUNDARY = Object.freeze({
   does_not_own: [
     "Skill authoring",
     "A proprietary skill format",
-    "CLI binary promotion",
+    "Tool binary installation",
     "Lane orchestration, handoffs, or closeout",
     "Workflow proof or SDLC authority",
     "Evidence replay or attestation"
@@ -30,7 +30,7 @@ export const SKILLPRESS_BOUNDARY = Object.freeze({
     "Agent Skills directories remain the canonical portable skill shape",
     "Skill drift and security policy checks fail closed",
     "Provider differences live in target adapters, not divergent prose",
-    "Skillpress composes with promote-cli and Runlane without importing their internals"
+    "Skillpress composes with external operator workflows without importing their internals"
   ],
   initial_commands: [
     "skillpress boundary --json",

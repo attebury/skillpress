@@ -2,7 +2,7 @@ import { GENERATED_HEADER_END, GENERATED_HEADER_START } from "./render.js";
 
 const HEADER_START = GENERATED_HEADER_START;
 const HEADER_END = GENERATED_HEADER_END;
-const POLICY_PACKS = new Set(["generic", "atteway"]);
+const POLICY_PACKS = new Set(["generic", "dogfood"]);
 
 function uniquePolicies(policies = ["generic"]) {
   if (policies.includes("none")) {
@@ -424,10 +424,10 @@ export function lintSkillContent(content, context = {}) {
       ...lintCommandContracts(content, context.contracts ?? {}, context)
     );
   }
-  if (policies.includes("atteway")) {
+  if (policies.includes("dogfood")) {
     findings.push(...lintPolicyRules(content, context));
   }
-  if (!policies.includes("generic") && policies.includes("atteway")) {
+  if (!policies.includes("generic") && policies.includes("dogfood")) {
     findings.push(...lintCommandContracts(content, context.contracts ?? {}, context));
   }
   return findings;

@@ -2,10 +2,10 @@
   "source_roots": [
     {
       "path": "agent-skills/src",
-      "layout": "atteway"
+      "layout": "tool-scoped"
     }
   ],
   "contract_root": "agent-skills/contracts",
-  "policy_packs": ["generic", "atteway"],
+  "policy_packs": ["generic", "dogfood"],
   "providers": ["codex", "agents", "cursor", "claude-code"]
 }

@@ -6,7 +6,7 @@ surfaces and reports drift.
 
 ## Source And Targets
 
-Canonical source:
+Tool-scoped source:
 
 ```text
 agent-skills/src/{tool}/{skill}/
@@ -17,7 +17,8 @@ agent-skills/src/{tool}/{skill}/
 agent-skills/contracts/{tool}.commands.json
 ```
 
-Generic Agent Skills layouts are also supported through `skillpress.config.json`:
+Generic Agent Skills layouts are also supported through `skillpress.config.json`
+and are the public quickstart shape:
 
 ```text
 skills/{skill}/SKILL.md
@@ -37,38 +38,19 @@ Directory providers receive full skill directories. Cursor receives a rendered
 project rule and reports a warning when auxiliary Agent Skills files cannot be
 consumed by that surface.
 
-Skillpress itself enables both policy packs:
+Dogfood examples enable both policy packs:
 
 ```json
 {
-  "policy_packs": ["generic", "atteway"]
+  "policy_packs": ["generic", "dogfood"]
 }
 ```
 
 External users can run only `generic`.
 
-## Promotion Composition
-
-Closeout should compose binaries and skills as separate boundaries:
-
-```bash
-promote-cli runlane
-skillpress sync --json --tool runlane
-```
-
-Short-term compatibility may let `promote-cli --with-skills` delegate by
-spawning `skillpress sync --json --tool <tool>`. Allowed reason: existing
-closeout flows may still call that flag while they migrate to explicit
-Skillpress sync. That delegation must remain a caller shim:
-
-- Skillpress does not run npm link or binary promotion.
-- Skillpress does not merge, close handoffs, or repair lane worktrees.
-- Skillpress does not import promote-cli internals.
-- promote-cli does not write Skillpress installed-skill manifests directly.
-
 ## Verification Rules
 
-Run before and after promotion:
+Run before and after sync:
 
 ```bash
 skillpress status --json
@@ -77,14 +59,16 @@ skillpress doctor --json
 
 `sync` also verifies canonical source before mutating provider roots. It fails
 closed on malformed Agent Skills frontmatter, malformed Markdown, unsafe source
-paths, symlinks, Atteway policy drift when that pack is enabled, and configured
+paths, symlinks, dogfood policy drift when that pack is enabled, and configured
 command contract drift.
 
 ## Open-Source Constraints
 
 The repository should stay free of machine-local credentials and private lane
-state. Tests must use temp HOME/workspace roots and must not read or mutate real
-installed provider roots.
+state. Keep machine-local forge and tool config ignored. Tracked examples may
+provide `.example` templates, but runtime credentials and private forge identity
+must stay outside the public package. Tests must use temp HOME/workspace roots
+and must not read or mutate real installed provider roots.
 
 The manifest schema is versioned. Version 1 remains readable; version 2 is the
 write target and records installed entrypoint, installed root, copied files,

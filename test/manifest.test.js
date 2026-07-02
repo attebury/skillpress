@@ -58,6 +58,25 @@ test("manifest validation reads v1 entries without requiring v2 tree fields", ()
   assert.equal(manifest.entries[0].source_tree_hash, null);
 });
 
+test("manifest validation treats legacy source_layout as metadata", () => {
+  const fx = fixture();
+  const installedPath = path.join(fx.homeDir, ".codex", "skills", "runlane-consumer", "SKILL.md");
+  const manifest = validateManifest({
+    schema: MANIFEST_SCHEMA,
+    version: MANIFEST_VERSION,
+    entries: [{
+      skill: "runlane-consumer",
+      provider: "codex",
+      source_path: "agent-skills/src/runlane/runlane-consumer/SKILL.md",
+      source_hash: HASH_A,
+      source_layout: "legacy-private",
+      installed_path: installedPath
+    }]
+  }, fx);
+
+  assert.equal(manifest.entries[0].source_layout, "legacy-private");
+});
+
 test("manifest validation fails closed on unsafe source and target paths", () => {
   const fx = fixture();
   const validInstalledPath = path.join(fx.homeDir, ".codex", "skills", "runlane-consumer", "SKILL.md");

@@ -314,7 +314,7 @@ function collectIssues({ inventory, manifestState, sourceState, contractState, p
       path: skill.path,
       tool: source?.tool ?? null
     };
-    if (policyPacks.includes("atteway")) {
+    if (policyPacks.includes("dogfood")) {
       for (const finding of lintPolicyRules(stripGeneratedHeader(skill.content), lintContext)) {
         issues.push(issue(finding.code, finding.severity, finding.message, {
           skill: skill.skill,

@@ -3,8 +3,8 @@ import path from "node:path";
 import { DEFAULT_CONTRACT_ROOT, DEFAULT_SOURCE_ROOT } from "./source.js";
 
 export const CONFIG_FILE = "skillpress.config.json";
-export const SOURCE_LAYOUTS = Object.freeze(["auto", "atteway", "agent-skills", "claude-skills"]);
-export const POLICY_PACKS = Object.freeze(["generic", "atteway"]);
+export const SOURCE_LAYOUTS = Object.freeze(["auto", "tool-scoped", "agent-skills", "claude-skills"]);
+export const POLICY_PACKS = Object.freeze(["generic", "dogfood"]);
 
 function configIssue(code, severity, message, details = {}) {
   return { code, severity, message, ...details };
@@ -30,14 +30,14 @@ function normalizeLayout(layout, sourcePath = "") {
     return { layout: "claude-skills", issue: null };
   }
   if (normalizedPath.endsWith("agent-skills/src")) {
-    return { layout: "atteway", issue: null };
+    return { layout: "tool-scoped", issue: null };
   }
   return { layout: "agent-skills", issue: null };
 }
 
 function defaultConfig() {
   return {
-    source_roots: [{ path: DEFAULT_SOURCE_ROOT, layout: "atteway" }],
+    source_roots: [{ path: DEFAULT_SOURCE_ROOT, layout: "tool-scoped" }],
     contract_root: DEFAULT_CONTRACT_ROOT,
     policy_packs: ["generic"],
     providers: null
