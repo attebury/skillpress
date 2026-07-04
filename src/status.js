@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { assertSafeSkillId, providerTargets, providerById, isPathInside } from "./providers.js";
-import { readManifest } from "./manifest.js";
+import { readManifestDocument, resolveManifestLocation } from "./manifest.js";
 import { loadCommandContracts } from "./contracts.js";
 import { expectedEntrypointBody, stripGeneratedHeader } from "./render.js";
 import {
@@ -130,15 +130,14 @@ function inventoryProvider(target) {
   };
 }
 
-function loadManifestIfPresent({ manifestPath, cwd, homeDir }) {
-  if (manifestPath) {
-    return { present: true, ...readManifest(manifestPath, { cwd, homeDir }) };
-  }
-  const defaultPath = path.join(cwd, "skillpress.manifest.json");
-  if (!fs.existsSync(defaultPath)) {
-    return { present: false, path: defaultPath, manifest: null };
-  }
-  return { present: true, ...readManifest(defaultPath, { cwd, homeDir }) };
+function loadManifestIfPresent({ manifestPath, configManifestPath, cwd, homeDir }) {
+  const state = readManifestDocument(manifestPath, { cwd, homeDir, configManifestPath });
+  return {
+    present: state.existed,
+    path: state.path,
+    location: state.location,
+    manifest: state.existed ? state.manifest : null
+  };
 }
 
 function manifestEntryKey(entry) {
@@ -469,6 +468,7 @@ export function statusPacket(options = {}) {
     providers: options.providers,
     policyPacks: options.policyPacks
   });
+  const configManifestPath = runtimeConfig.config.manifest?.path ?? null;
   const sourceState = discoverSkillSources({ cwd, sourceRoots: runtimeConfig.config.source_roots, tool: options.tool });
   const contractState = loadCommandContracts({ cwd, contractRoot: runtimeConfig.config.contract_root });
   const allProviders = providerTargets({ cwd, homeDir });
@@ -487,11 +487,18 @@ export function statusPacket(options = {}) {
   let manifestState;
   const loadIssues = [];
   try {
-    manifestState = loadManifestIfPresent({ manifestPath: options.manifestPath, cwd, homeDir });
+    manifestState = loadManifestIfPresent({ manifestPath: options.manifestPath, configManifestPath, cwd, homeDir });
   } catch (error) {
+    let location = null;
+    try {
+      location = resolveManifestLocation({ cwd, homeDir, manifestPath: options.manifestPath, configManifestPath });
+    } catch {
+      location = null;
+    }
     manifestState = {
       present: false,
-      path: path.resolve(cwd, options.manifestPath ?? "skillpress.manifest.json"),
+      path: location?.path ?? null,
+      location,
       manifest: null
     };
     loadIssues.push(issue(error.code ?? "manifest_invalid", "error", error.message, {
@@ -525,6 +532,11 @@ export function statusPacket(options = {}) {
     ...providerIssues,
     ...runtimeConfig.issues,
     ...loadIssues,
+    ...(!manifestState.location?.explicit && manifestState.location?.legacy_default_present
+      ? [issue("legacy_install_manifest_ignored", "warning", "Legacy root install manifest ignored; pass --manifest skillpress.manifest.json to inspect or migrate it explicitly", {
+        path: manifestState.location.legacy_default_path
+      })]
+      : []),
     ...inventory.flatMap((provider) => provider.issues ?? []).filter((entry) => inventoryIssueInScope(entry, toolScope)),
     ...sourceState.issues,
     ...contractState.issues.filter((entry) => contractIssueInScope(entry, toolScope)),
@@ -560,8 +572,12 @@ export function statusPacket(options = {}) {
     manifest: {
       present: manifestState.present,
       path: manifestState.path,
-      version: manifestState.manifest?.version ?? null,
-      entry_count: manifestState.manifest?.entries.length ?? 0
+      mode: manifestState.location?.mode ?? null,
+      explicit: manifestState.location?.explicit ?? false,
+      legacy_default_path: manifestState.location?.legacy_default_path ?? null,
+      legacy_default_present: manifestState.location?.legacy_default_present ?? false,
+      version: manifestState.present ? manifestState.manifest?.version ?? null : null,
+      entry_count: manifestState.present ? manifestState.manifest?.entries.length ?? 0 : 0
     },
     canonical_sources: {
       root: sourceState.root,

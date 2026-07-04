@@ -153,6 +153,18 @@ package.
 
 ## Manifest Shape
 
+The install manifest is local provider state. By default, Skillpress writes it
+outside the source checkout:
+
+- inside Git worktrees: `git rev-parse --git-path skillpress/install-manifest.local.json`;
+- outside Git worktrees: `${XDG_STATE_HOME:-~/.local/state}/skillpress/install-manifests/<cwd-hash>/install-manifest.local.json`.
+
+Use `--manifest <path>` or config `{"manifest":{"path":"..."}}` only when you
+intentionally want a specific local manifest path. A root
+`skillpress.manifest.json` is treated as a legacy explicit install manifest;
+implicit `sync`, `status`, and `doctor` warn and ignore it. Pass
+`--manifest skillpress.manifest.json` to inspect or migrate one deliberately.
+
 The manifest is versioned. Version 2 records both entrypoint and tree facts:
 
 ```json

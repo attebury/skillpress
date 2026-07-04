@@ -107,6 +107,30 @@ test("status reports missing installed skills and generated header problems from
   assert.ok(packet.issues.some((entry) => entry.code === "generated_header_stale"));
 });
 
+test("status ignores legacy root install manifest in implicit mode", () => {
+  const fx = fixture();
+  fs.writeFileSync(path.join(fx.cwd, "skillpress.manifest.json"), JSON.stringify({
+    schema: MANIFEST_SCHEMA,
+    version: MANIFEST_VERSION,
+    entries: [
+      {
+        skill: "missing",
+        provider: "codex",
+        source_path: "agent-skills/src/missing/SKILL.md",
+        source_hash: HASH_A,
+        installed_path: "~/.codex/skills/missing/SKILL.md"
+      }
+    ]
+  }));
+
+  const packet = statusPacket({ cwd: fx.cwd, homeDir: fx.homeDir });
+  assert.equal(packet.ok, true);
+  assert.equal(packet.manifest.present, false);
+  assert.equal(packet.manifest.legacy_default_present, true);
+  assert.ok(packet.issues.some((entry) => entry.code === "legacy_install_manifest_ignored"));
+  assert.ok(!packet.issues.some((entry) => entry.code === "installed_skill_missing"));
+});
+
 test("status lints canonical sources before install", () => {
   const fx = fixture();
   writeSkill(path.join(fx.cwd, "agent-skills", "contracts", "remogram.commands.json"), JSON.stringify({
@@ -162,9 +186,10 @@ test("tool-scoped status ignores unrelated installed global drift", () => {
 test("tool-scoped status ignores unrelated missing manifest entries", () => {
   const fx = fixture();
   writeToolSkill(fx, "runlane", "runlane-consumer");
-  assert.equal(syncPacket({ cwd: fx.cwd, homeDir: fx.homeDir, provider: "codex", tool: "runlane" }).ok, true);
+  const sync = syncPacket({ cwd: fx.cwd, homeDir: fx.homeDir, provider: "codex", tool: "runlane" });
+  assert.equal(sync.ok, true);
 
-  const manifestPath = path.join(fx.cwd, "skillpress.manifest.json");
+  const manifestPath = sync.manifest.path;
   const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
   manifest.entries.push({
     skill: "remogram-consumer",

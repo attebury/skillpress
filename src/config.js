@@ -40,7 +40,10 @@ function defaultConfig() {
     source_roots: [{ path: DEFAULT_SOURCE_ROOT, layout: "tool-scoped" }],
     contract_root: DEFAULT_CONTRACT_ROOT,
     policy_packs: ["generic"],
-    providers: null
+    providers: null,
+    manifest: {
+      path: null
+    }
   };
 }
 
@@ -112,6 +115,33 @@ function normalizePolicies(document, overrides, issues) {
   return policies;
 }
 
+function normalizeManifestConfig(document, issues) {
+  if (document?.manifest === undefined) {
+    return defaultConfig().manifest;
+  }
+  if (!document.manifest || typeof document.manifest !== "object" || Array.isArray(document.manifest)) {
+    issues.push(configIssue("config_invalid_manifest", "error", "manifest config must be an object"));
+    return defaultConfig().manifest;
+  }
+  for (const key of Object.keys(document.manifest)) {
+    if (key !== "path" || /hook|command/i.test(key)) {
+      issues.push(configIssue("config_invalid_manifest_field", "error", "manifest config field is not supported", {
+        field: key
+      }));
+    }
+  }
+  if (document.manifest.path === undefined || document.manifest.path === null) {
+    return defaultConfig().manifest;
+  }
+  if (typeof document.manifest.path !== "string" || document.manifest.path.length === 0) {
+    issues.push(configIssue("config_invalid_manifest_path", "error", "manifest.path must be a non-empty string"));
+    return defaultConfig().manifest;
+  }
+  return {
+    path: document.manifest.path
+  };
+}
+
 export function resolveRuntimeConfig(options = {}) {
   const cwd = path.resolve(options.cwd ?? process.cwd());
   const configState = readConfigFile(options.configPath, cwd);
@@ -131,6 +161,7 @@ export function resolveRuntimeConfig(options = {}) {
       : Array.isArray(document.providers)
         ? document.providers
         : null;
+  const manifest = normalizeManifestConfig(document, issues);
 
   return {
     path: configState.path,
@@ -139,7 +170,8 @@ export function resolveRuntimeConfig(options = {}) {
       source_roots: sourceRoots,
       contract_root: options.contractRoot ?? document.contract_root ?? DEFAULT_CONTRACT_ROOT,
       policy_packs: policyPacks,
-      providers
+      providers,
+      manifest
     },
     issues
   };
