@@ -1,6 +1,6 @@
 {
   "public_repo": "https://github.com/attebury/skillpress.git",
-  "stage_repo": "file:///tmp/skillpress-public-stage.git",
+  "stage_repo": "file:///tmp/skillpress-stage.git",
   "stage": {
     "strategy": "replace-main",
     "ref": "main"
