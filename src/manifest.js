@@ -1,3 +1,5 @@
+import crypto from "node:crypto";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import {
@@ -10,6 +12,8 @@ import {
 export const MANIFEST_SCHEMA = "skillpress.install-manifest";
 export const MANIFEST_VERSION = 2;
 export const READABLE_MANIFEST_VERSIONS = Object.freeze([1, 2]);
+export const LEGACY_MANIFEST_FILE = "skillpress.manifest.json";
+export const LOCAL_GIT_MANIFEST_PATH = "skillpress/install-manifest.local.json";
 
 const SAFE_SOURCE_REPO = /^[A-Za-z0-9._/-]+$/;
 const SAFE_VERSION = /^[A-Za-z0-9._:+-]+$/;
@@ -28,6 +32,131 @@ function requireString(value, field, { max = 512 } = {}) {
     throw manifestError("manifest_invalid_field", `${field} must be a non-empty string`, { field });
   }
   return value;
+}
+
+function existingParent(targetPath) {
+  let cursor = path.resolve(targetPath);
+  while (!fs.existsSync(cursor)) {
+    const parent = path.dirname(cursor);
+    if (parent === cursor) {
+      return null;
+    }
+    cursor = parent;
+  }
+  return cursor;
+}
+
+function assertNoSymlinkEscape(resolvedPath, allowedRoot, field) {
+  const root = path.resolve(allowedRoot);
+  const existing = existingParent(path.dirname(resolvedPath));
+  if (!existing) {
+    return;
+  }
+  const realRoot = fs.realpathSync(root);
+  const realExisting = fs.realpathSync(existing);
+  if (!isPathInside(realExisting, realRoot)) {
+    throw manifestError("manifest_path_outside_root", `${field} must not escape the configured root`, {
+      field,
+      path: resolvedPath,
+      root
+    });
+  }
+}
+
+function validateManifestPathInput(value, { cwd, homeDir, field = "manifest" }) {
+  const raw = requireString(value, field, { max: 2048 });
+  if (raw.includes("\0")) {
+    throw manifestError("manifest_unsafe_path", `${field} must not contain NUL`, { field });
+  }
+  const expanded = expandHome(raw, homeDir);
+  if (!path.isAbsolute(expanded)) {
+    const parts = expanded.split(/[\\/]+/).filter(Boolean);
+    if (parts.includes("..")) {
+      throw manifestError("manifest_unsafe_path", `${field} must not contain parent segments`, {
+        field,
+        path: raw
+      });
+    }
+    const resolved = path.resolve(cwd, expanded);
+    assertNoSymlinkEscape(resolved, cwd, field);
+    return resolved;
+  }
+  return path.resolve(expanded);
+}
+
+function gitLocalManifestPath(cwd) {
+  try {
+    const gitPath = execFileSync("git", ["rev-parse", "--git-path", LOCAL_GIT_MANIFEST_PATH], {
+      cwd,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"]
+    }).trim();
+    return gitPath ? path.resolve(cwd, gitPath) : null;
+  } catch {
+    return null;
+  }
+}
+
+function stateManifestPath({ cwd, homeDir, xdgStateHome = process.env.XDG_STATE_HOME }) {
+  const stateRoot = xdgStateHome
+    ? path.resolve(expandHome(xdgStateHome, homeDir))
+    : path.join(homeDir, ".local", "state");
+  const cwdHash = crypto.createHash("sha256").update(path.resolve(cwd)).digest("hex").slice(0, 24);
+  return path.join(stateRoot, "skillpress", "install-manifests", cwdHash, "install-manifest.local.json");
+}
+
+export function legacyManifestPath({ cwd = process.cwd() } = {}) {
+  return path.resolve(cwd, LEGACY_MANIFEST_FILE);
+}
+
+export function resolveManifestLocation({
+  cwd = process.cwd(),
+  homeDir = process.env.HOME ?? ".",
+  manifestPath: requestedPath = null,
+  configManifestPath = null,
+  xdgStateHome = process.env.XDG_STATE_HOME
+} = {}) {
+  const resolvedCwd = path.resolve(cwd);
+  const resolvedHome = path.resolve(homeDir);
+  const legacyDefaultPath = legacyManifestPath({ cwd: resolvedCwd });
+  const legacyDefaultPresent = fs.existsSync(legacyDefaultPath);
+  const explicitPath = requestedPath ?? configManifestPath;
+  if (explicitPath !== null && explicitPath !== undefined) {
+    return {
+      path: validateManifestPathInput(explicitPath, { cwd: resolvedCwd, homeDir: resolvedHome }),
+      mode: "explicit",
+      explicit: true,
+      source: requestedPath !== null && requestedPath !== undefined ? "cli" : "config",
+      legacy_default_path: legacyDefaultPath,
+      legacy_default_present: legacyDefaultPresent
+    };
+  }
+  const gitPath = gitLocalManifestPath(resolvedCwd);
+  if (gitPath) {
+    return {
+      path: gitPath,
+      mode: "git-local",
+      explicit: false,
+      source: "default",
+      legacy_default_path: legacyDefaultPath,
+      legacy_default_present: legacyDefaultPresent
+    };
+  }
+  return {
+    path: stateManifestPath({ cwd: resolvedCwd, homeDir: resolvedHome, xdgStateHome }),
+    mode: "xdg-state",
+    explicit: false,
+    source: "default",
+    legacy_default_path: legacyDefaultPath,
+    legacy_default_present: legacyDefaultPresent
+  };
+}
+
+function validateOptionalString(value, field, options = {}) {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  return requireString(value, field, options);
 }
 
 function validateSafeRelativePath(value, field) {
@@ -95,10 +224,21 @@ function normalizeProviderPath(value, providerTarget, { cwd, homeDir, field }) {
 
 function normalizeInstalledPath(value, providerTarget, { cwd, homeDir }) {
   const resolved = normalizeProviderPath(value, providerTarget, { cwd, homeDir, field: "installed_path" });
-  if (providerTarget.kind === "cursor-rule") {
-    if (path.extname(resolved) !== ".mdc") {
-      throw manifestError("manifest_invalid_installed_path", "cursor installed_path must point to an .mdc rule", {
+  if (providerTarget.kind === "rule-directory") {
+    const extension = providerTarget.extension ?? ".md";
+    if (!resolved.endsWith(extension)) {
+      throw manifestError("manifest_invalid_installed_path", `rule installed_path must point to a ${extension} file`, {
         installed_path: resolved
+      });
+    }
+    return resolved;
+  }
+  if (providerTarget.kind === "single-instructions-file") {
+    const expected = path.join(providerTarget.root, providerTarget.entrypoint ?? "AGENTS.skillpress.md");
+    if (resolved !== expected) {
+      throw manifestError("manifest_invalid_installed_path", "single-file provider installed_path must point to the configured generated instructions file", {
+        installed_path: resolved,
+        expected
       });
     }
     return resolved;
@@ -113,8 +253,10 @@ function normalizeInstalledPath(value, providerTarget, { cwd, homeDir }) {
 
 function normalizeInstalledRoot(value, providerTarget, { cwd, homeDir }) {
   if (value === undefined || value === null) {
-    return path.dirname(normalizeInstalledPath(providerTarget.kind === "cursor-rule"
-      ? path.join(providerTarget.root, "__placeholder__.mdc")
+    return path.dirname(normalizeInstalledPath(providerTarget.kind === "rule-directory"
+      ? path.join(providerTarget.root, `__placeholder__${providerTarget.extension ?? ".md"}`)
+      : providerTarget.kind === "single-instructions-file"
+        ? path.join(providerTarget.root, providerTarget.entrypoint ?? "AGENTS.skillpress.md")
       : path.join(providerTarget.root, "__placeholder__", "SKILL.md"), providerTarget, { cwd, homeDir }));
   }
   return normalizeProviderPath(value, providerTarget, { cwd, homeDir, field: "installed_root" });
@@ -130,6 +272,13 @@ function validateFiles(value) {
   return value.map((entry) => validateSafeRelativePath(entry, "files[]"));
 }
 
+function contextProviderTarget(provider, context, { cwd, homeDir }) {
+  const configuredTargets = context.providerTargets instanceof Map
+    ? context.providerTargets
+    : new Map((context.providerTargets ?? []).map((entry) => [entry.id, entry]));
+  return configuredTargets.get(provider) ?? providerById(provider, { cwd, homeDir });
+}
+
 export function validateManifestEntry(entry, context = {}) {
   const cwd = path.resolve(context.cwd ?? process.cwd());
   const homeDir = path.resolve(context.homeDir ?? process.env.HOME ?? ".");
@@ -138,12 +287,10 @@ export function validateManifestEntry(entry, context = {}) {
   }
   const skill = assertSafeSkillId(requireString(entry.skill, "skill", { max: 120 }));
   const provider = requireString(entry.provider, "provider", { max: 80 });
-  const providerTarget = providerById(provider, { cwd, homeDir });
+  const providerTarget = contextProviderTarget(provider, context, { cwd, homeDir });
   const sourcePath = validateOptionalSafeRelativePath(entry.source_path, "source_path");
   const sourceRootPath = validateOptionalSafeRelativePath(entry.source_root_path, "source_root_path");
-  const sourceRepo = entry.source_repo === undefined
-    ? undefined
-    : requireString(entry.source_repo, "source_repo", { max: 256 });
+  const sourceRepo = validateOptionalString(entry.source_repo, "source_repo", { max: 256 });
   if (sourceRepo !== undefined && (!SAFE_SOURCE_REPO.test(sourceRepo) || sourceRepo.includes(".."))) {
     throw manifestError("manifest_invalid_source_repo", "source_repo must be a safe repository identifier", {
       source_repo: sourceRepo
@@ -164,7 +311,7 @@ export function validateManifestEntry(entry, context = {}) {
       provider
     });
   }
-  const version = entry.version === undefined ? null : requireString(entry.version, "version", { max: 120 });
+  const version = validateOptionalString(entry.version, "version", { max: 120 }) ?? null;
   if (version !== null && !SAFE_VERSION.test(version)) {
     throw manifestError("manifest_invalid_version", "version contains unsafe characters", { version });
   }
@@ -191,7 +338,12 @@ export function validateManifestEntry(entry, context = {}) {
     installed_root: installedRoot,
     files,
     version,
-    target: entry.target === undefined ? provider : requireString(entry.target, "target", { max: 80 })
+    target: validateOptionalString(entry.target, "target", { max: 80 }) ?? provider,
+    surface_id: validateOptionalString(entry.surface_id, "surface_id", { max: 120 }) ?? null,
+    surface_kind: validateOptionalString(entry.surface_kind, "surface_kind", { max: 80 }) ?? null,
+    fidelity: validateOptionalString(entry.fidelity, "fidelity", { max: 80 }) ?? null,
+    provider_detected: entry.provider_detected === undefined || entry.provider_detected === null ? null : entry.provider_detected === true,
+    auxiliary_files_omitted: entry.auxiliary_files_omitted === undefined || entry.auxiliary_files_omitted === null ? false : entry.auxiliary_files_omitted === true
   };
 }
 
@@ -215,10 +367,12 @@ export function validateManifest(document, context = {}) {
   const entries = document.entries.map((entry) => validateManifestEntry(entry, context));
   const byInstalledPath = new Set();
   for (const entry of entries) {
-    const key = entry.installed_path;
+    const key = entry.surface_id
+      ? `${entry.surface_id}\0${entry.installed_path}\0${entry.skill}`
+      : entry.installed_path;
     if (byInstalledPath.has(key)) {
       throw manifestError("manifest_duplicate_installed_path", "installed_path must be unique", {
-        installed_path: key
+        installed_path: entry.installed_path
       });
     }
     byInstalledPath.add(key);
@@ -233,7 +387,7 @@ export function validateManifest(document, context = {}) {
 export function readManifest(manifestPath, context = {}) {
   const cwd = path.resolve(context.cwd ?? process.cwd());
   const homeDir = path.resolve(context.homeDir ?? process.env.HOME ?? ".");
-  const resolvedPath = path.resolve(cwd, expandHome(manifestPath, homeDir));
+  const resolvedPath = validateManifestPathInput(manifestPath, { cwd, homeDir });
   const raw = fs.readFileSync(resolvedPath, "utf8");
   return {
     path: resolvedPath,
@@ -242,7 +396,7 @@ export function readManifest(manifestPath, context = {}) {
 }
 
 export function manifestPath({ cwd = process.cwd(), manifestPath: requestedPath = null, homeDir = process.env.HOME ?? "." } = {}) {
-  return path.resolve(path.resolve(cwd), expandHome(requestedPath ?? "skillpress.manifest.json", homeDir));
+  return resolveManifestLocation({ cwd, homeDir, manifestPath: requestedPath }).path;
 }
 
 export function emptyManifest() {
@@ -254,14 +408,18 @@ export function emptyManifest() {
 }
 
 export function readManifestDocument(manifestFile, context = {}) {
-  const resolvedPath = manifestPath({
+  const location = resolveManifestLocation({
     cwd: context.cwd,
     homeDir: context.homeDir,
-    manifestPath: manifestFile
+    manifestPath: manifestFile,
+    configManifestPath: context.configManifestPath,
+    xdgStateHome: context.xdgStateHome
   });
+  const resolvedPath = location.path;
   if (!fs.existsSync(resolvedPath)) {
     return {
       path: resolvedPath,
+      location,
       document: emptyManifest(),
       manifest: validateManifest(emptyManifest(), context),
       existed: false
@@ -270,6 +428,7 @@ export function readManifestDocument(manifestFile, context = {}) {
   const document = JSON.parse(fs.readFileSync(resolvedPath, "utf8"));
   return {
     path: resolvedPath,
+    location,
     document,
     manifest: validateManifest(document, context),
     existed: true
@@ -277,11 +436,14 @@ export function readManifestDocument(manifestFile, context = {}) {
 }
 
 export function writeManifestDocument(manifestFile, document, context = {}) {
-  const resolvedPath = manifestPath({
+  const location = resolveManifestLocation({
     cwd: context.cwd,
     homeDir: context.homeDir,
-    manifestPath: manifestFile
+    manifestPath: manifestFile,
+    configManifestPath: context.configManifestPath,
+    xdgStateHome: context.xdgStateHome
   });
+  const resolvedPath = location.path;
   validateManifest(document, context);
   fs.mkdirSync(path.dirname(resolvedPath), { recursive: true });
   const tmp = path.join(path.dirname(resolvedPath), `.${path.basename(resolvedPath)}.${process.pid}.tmp`);

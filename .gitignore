@@ -1,6 +1,10 @@
 node_modules/
 coverage/
+.releasepress-report/
 .DS_Store
 .tmp/
 *.log
 .remogram.json
+skillpress.manifest.json
+.skillpress/
+.diagram/

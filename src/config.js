@@ -40,7 +40,10 @@ function defaultConfig() {
     source_roots: [{ path: DEFAULT_SOURCE_ROOT, layout: "tool-scoped" }],
     contract_root: DEFAULT_CONTRACT_ROOT,
     policy_packs: ["generic"],
-    providers: null
+    providers: null,
+    manifest: {
+      path: null
+    }
   };
 }
 
@@ -112,6 +115,87 @@ function normalizePolicies(document, overrides, issues) {
   return policies;
 }
 
+function normalizeManifestConfig(document, issues) {
+  if (document?.manifest === undefined) {
+    return defaultConfig().manifest;
+  }
+  if (!document.manifest || typeof document.manifest !== "object" || Array.isArray(document.manifest)) {
+    issues.push(configIssue("config_invalid_manifest", "error", "manifest config must be an object"));
+    return defaultConfig().manifest;
+  }
+  for (const key of Object.keys(document.manifest)) {
+    if (key !== "path" || /hook|command/i.test(key)) {
+      issues.push(configIssue("config_invalid_manifest_field", "error", "manifest config field is not supported", {
+        field: key
+      }));
+    }
+  }
+  if (document.manifest.path === undefined || document.manifest.path === null) {
+    return defaultConfig().manifest;
+  }
+  if (typeof document.manifest.path !== "string" || document.manifest.path.length === 0) {
+    issues.push(configIssue("config_invalid_manifest_path", "error", "manifest.path must be a non-empty string"));
+    return defaultConfig().manifest;
+  }
+  return {
+    path: document.manifest.path
+  };
+}
+
+function normalizeProviders(document, overrides, issues) {
+  if (overrides.providers?.length) {
+    return overrides.providers;
+  }
+  if (document.providers === undefined || document.providers === null) {
+    return null;
+  }
+  if (!Array.isArray(document.providers)) {
+    issues.push(configIssue("config_invalid_providers", "error", "providers must be an array"));
+    return null;
+  }
+  const providers = [];
+  for (const entry of document.providers) {
+    if (typeof entry === "string") {
+      if (entry.length === 0) {
+        issues.push(configIssue("config_invalid_provider", "error", "provider id must be a non-empty string"));
+        continue;
+      }
+      providers.push(entry);
+      continue;
+    }
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      issues.push(configIssue("config_invalid_provider", "error", "provider entries must be strings or objects"));
+      continue;
+    }
+    const id = entry.id ?? entry.provider;
+    if (typeof id !== "string" || id.length === 0) {
+      issues.push(configIssue("config_invalid_provider", "error", "provider entries must include id"));
+      continue;
+    }
+    for (const key of Object.keys(entry)) {
+      if (!["id", "provider", "enabled", "required", "root", "scope", "allow_undetected"].includes(key) || /hook|command/i.test(key)) {
+        issues.push(configIssue("config_invalid_provider_field", "error", "provider config field is not supported", {
+          provider: id,
+          field: key
+        }));
+      }
+    }
+    providers.push({ ...entry, id });
+  }
+  return providers;
+}
+
+function providerId(entry) {
+  return typeof entry === "string" ? entry : entry?.id;
+}
+
+function explicitProviderRequest(entry, provider) {
+  if (typeof entry === "string" || entry === undefined || entry === null) {
+    return { id: provider, explicit: true };
+  }
+  return { ...entry, explicit: true };
+}
+
 export function resolveRuntimeConfig(options = {}) {
   const cwd = path.resolve(options.cwd ?? process.cwd());
   const configState = readConfigFile(options.configPath, cwd);
@@ -124,13 +208,13 @@ export function resolveRuntimeConfig(options = {}) {
     sourceRoot: options.sourceRoot,
     sourceLayout: options.sourceLayout
   }, issues);
-  const providers = options.providers?.length
-    ? options.providers
-    : options.provider
-      ? [options.provider]
-      : Array.isArray(document.providers)
-        ? document.providers
-        : null;
+  const configuredProviders = normalizeProviders(document, {}, issues);
+  const providers = options.provider
+    ? [explicitProviderRequest(configuredProviders?.find((entry) => providerId(entry) === options.provider), options.provider)]
+    : options.providers?.length
+      ? options.providers
+      : configuredProviders;
+  const manifest = normalizeManifestConfig(document, issues);
 
   return {
     path: configState.path,
@@ -139,7 +223,9 @@ export function resolveRuntimeConfig(options = {}) {
       source_roots: sourceRoots,
       contract_root: options.contractRoot ?? document.contract_root ?? DEFAULT_CONTRACT_ROOT,
       policy_packs: policyPacks,
-      providers
+      providers,
+      configured_providers: configuredProviders,
+      manifest
     },
     issues
   };

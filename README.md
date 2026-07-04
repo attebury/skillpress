@@ -37,7 +37,7 @@ Use a config like:
     { "path": "skills", "layout": "agent-skills" }
   ],
   "policy_packs": ["generic"],
-  "providers": ["codex", "claude-code", "cursor"]
+  "providers": ["codex", "agents", "cursor"]
 }
 ```
 
@@ -57,6 +57,7 @@ With no config, Skillpress looks for `agent-skills/src` using the
 
 ```bash
 skillpress boundary --json
+skillpress repair-plan --json
 skillpress status --json
 skillpress doctor --json
 skillpress sync --json --provider codex --tool runlane
@@ -76,6 +77,24 @@ skillpress doctor --json --policy generic
 
 Supported source layouts are `auto`, `tool-scoped`, `agent-skills`, and
 `claude-skills`.
+
+## Installed Hygiene
+
+Use scoped doctor checks for product gates:
+
+```bash
+skillpress doctor --json --tool runlane
+```
+
+Use global repair planning for machine-wide installed-skill drift:
+
+```bash
+skillpress repair-plan --json
+```
+
+`repair-plan` is read-only. It reports resync, source-config, manifest, and
+manual-review actions without deleting or rewriting provider caches. See
+[docs/installed-hygiene.md](docs/installed-hygiene.md).
 
 ## Source Layouts
 
@@ -109,10 +128,19 @@ Installed roots are targets only:
 .cursor/rules/skillpress/{skill}.mdc
 ```
 
-Directory providers receive the full skill directory. Cursor receives a
-rendered project rule because Cursor's first-class project surface is
-`.cursor/rules`. If a Cursor target has auxiliary skill files, `sync` and
-`status` warn that Cursor cannot consume those files directly.
+Skillpress models provider surfaces by fidelity:
+
+- `skill-directory`: full Agent Skills directory copy, including auxiliary
+  files.
+- `rule-directory`: one rendered rule or instruction file per skill; auxiliary
+  files are omitted with a warning.
+- `single-instructions-file`: an opt-in generated instruction file; auxiliary
+  files are omitted with a warning.
+
+Directory providers receive the full skill directory. Rule providers receive a
+rendered view of `SKILL.md` because their native surfaces are rules or custom
+instructions. If a rule target has auxiliary skill files, `sync` and `status`
+warn that the provider cannot consume those files directly.
 
 Each installed entrypoint is rendered with a generated header recording
 `source_path`, `source_hash`, `skill_md_hash`, `source_tree_hash`,
@@ -152,6 +180,18 @@ runtime credentials and private forge identity must stay outside the public
 package.
 
 ## Manifest Shape
+
+The install manifest is local provider state. By default, Skillpress writes it
+outside the source checkout:
+
+- inside Git worktrees: `git rev-parse --git-path skillpress/install-manifest.local.json`;
+- outside Git worktrees: `${XDG_STATE_HOME:-~/.local/state}/skillpress/install-manifests/<cwd-hash>/install-manifest.local.json`.
+
+Use `--manifest <path>` or config `{"manifest":{"path":"..."}}` only when you
+intentionally want a specific local manifest path. A root
+`skillpress.manifest.json` is treated as a legacy explicit install manifest;
+implicit `sync`, `status`, and `doctor` warn and ignore it. Pass
+`--manifest skillpress.manifest.json` to inspect or migrate one deliberately.
 
 The manifest is versioned. Version 2 records both entrypoint and tree facts:
 
@@ -199,10 +239,45 @@ validates configured source layouts against the current public layout list.
 
 ## Provider Targets
 
+Default providers are `codex`, `agents`, `cursor`, and `claude-code`. Tool
+specific home providers such as Codex and Claude Code are optional by default:
+if their local config directory is absent, default sync/status/doctor reports a
+`provider_unavailable` warning and skips that target. Explicit
+`--provider <id>` and configured `required: true` providers fail closed when
+the provider is unavailable.
+
+Full Agent Skills directory providers:
+
 - `codex`: `~/.codex/skills/{skill}/SKILL.md`
 - `agents`: `~/.agents/skills/{skill}/SKILL.md`
 - `claude-code`: `~/.claude/skills/{skill}/SKILL.md`
+- `zed`: `~/.agents/skills/{skill}/SKILL.md`
+- `github-copilot`: `~/.copilot/skills/{skill}/SKILL.md`
+- `cline`: `~/.cline/skills/{skill}/SKILL.md`
+- `roo`: `~/.roo/skills/{skill}/SKILL.md`
+
+Rule and instruction render providers:
+
 - `cursor`: `.cursor/rules/skillpress/{skill}.mdc`
+- `continue`: `.continue/rules/{skill}.md`
+- `devin`: `.devin/rules/{skill}.md`
+- `github-copilot-instructions`: `.github/instructions/skillpress/{skill}.instructions.md`
+- `agents-md`: `AGENTS.skillpress.md`
+
+Provider config entries can be strings or objects:
+
+```json
+{
+  "providers": [
+    "agents",
+    { "id": "claude-code", "required": true },
+    { "id": "codex", "root": ".skillpress/codex-skills", "allow_undetected": true }
+  ]
+}
+```
+
+Custom roots are validated as local paths. Skillpress does not execute provider
+binaries for detection and does not install IDEs or CLIs.
 
 ## Development
 

@@ -11,7 +11,7 @@ const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 test("package manifest explicitly limits published runtime files", () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(repoRoot, "package.json"), "utf8"));
 
-  assert.equal(pkg.version, "0.1.0-beta.0");
+  assert.equal(pkg.version, "0.1.0-beta.1");
   assert.equal(pkg.repository.url, "git+https://github.com/attebury/skillpress.git");
   assert.equal(pkg.bugs.url, "https://github.com/attebury/skillpress/issues");
   assert.equal(pkg.homepage, "https://github.com/attebury/skillpress#readme");

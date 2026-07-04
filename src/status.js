@@ -1,10 +1,10 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { assertSafeSkillId, providerTargets, providerById, isPathInside } from "./providers.js";
-import { readManifest } from "./manifest.js";
+import { assertSafeSkillId, providerById, isPathInside, resolveProviderSelection } from "./providers.js";
+import { readManifestDocument, resolveManifestLocation } from "./manifest.js";
 import { loadCommandContracts } from "./contracts.js";
-import { expectedEntrypointBody, stripGeneratedHeader } from "./render.js";
+import { expectedEntrypointBody, renderSingleInstructions, stripGeneratedHeader } from "./render.js";
 import {
   compareHeaderToManifest,
   lintCommandContracts,
@@ -24,11 +24,11 @@ function issue(code, severity, message, details = {}) {
   return { code, severity, message, ...details };
 }
 
-function readSkillFile(filePath, provider, installedRoot) {
+function readSkillFile(filePath, provider, installedRoot, skillOverride = null) {
   const content = fs.readFileSync(filePath, "utf8");
-  const skill = path.basename(filePath) === "SKILL.md"
+  const skill = skillOverride ?? (path.basename(filePath) === "SKILL.md"
     ? path.basename(path.dirname(filePath))
-    : path.basename(filePath, path.extname(filePath));
+    : path.basename(filePath, path.extname(filePath)));
   const header = parseGeneratedHeader(content);
   const markdownFindings = lintMarkdownFences(content);
   return {
@@ -51,14 +51,14 @@ function readSkillFile(filePath, provider, installedRoot) {
 }
 
 function inventoryProvider(target) {
-  if (!target.installable || !target.root) {
+  if (!target.installable || !target.root || !target.syncable) {
     return {
       ...target,
       exists: false,
       scanned: false,
       skills: [],
       issues: [],
-      advisory: target.placeholder_reason ?? "Provider root is not installable."
+      advisory: target.unavailable_reason ?? target.placeholder_reason ?? "Provider root is not installable."
     };
   }
   if (!fs.existsSync(target.root)) {
@@ -72,12 +72,24 @@ function inventoryProvider(target) {
   }
   const skills = [];
   const issues = [];
-  if (target.kind === "cursor-rule") {
+  if (target.kind === "rule-directory") {
     for (const dirent of fs.readdirSync(target.root, { withFileTypes: true })) {
-      if (!dirent.isFile() || path.extname(dirent.name) !== ".mdc") {
+      const extension = target.extension ?? ".md";
+      if (dirent.isSymbolicLink()) {
+        const skill = dirent.name.endsWith(extension)
+          ? dirent.name.slice(0, -extension.length)
+          : dirent.name;
+        issues.push(issue("installed_skill_symlink", "error", "Installed provider-cache skill entry is a symlink", {
+          provider: target.id,
+          skill,
+          path: path.join(target.root, dirent.name)
+        }));
         continue;
       }
-      const skill = path.basename(dirent.name, ".mdc");
+      if (!dirent.isFile() || !dirent.name.endsWith(extension)) {
+        continue;
+      }
+      const skill = dirent.name.slice(0, -extension.length);
       try {
         assertSafeSkillId(skill);
       } catch (error) {
@@ -101,7 +113,42 @@ function inventoryProvider(target) {
       issues
     };
   }
+  if (target.kind === "single-instructions-file") {
+    const skillPath = path.join(target.root, target.entrypoint ?? "AGENTS.skillpress.md");
+    if (isPathInside(skillPath, target.root) && fs.existsSync(skillPath) && fs.lstatSync(skillPath).isSymbolicLink()) {
+      issues.push(issue("installed_skill_symlink", "error", "Installed provider-cache instruction file is a symlink", {
+        provider: target.id,
+        skill: target.single_skill_id ?? "skillpress-instructions",
+        path: skillPath
+      }));
+      return {
+        ...target,
+        exists: true,
+        scanned: true,
+        skills,
+        issues
+      };
+    }
+    if (isPathInside(skillPath, target.root) && fs.existsSync(skillPath)) {
+      skills.push(readSkillFile(skillPath, target.id, target.root, target.single_skill_id ?? "skillpress-instructions"));
+    }
+    return {
+      ...target,
+      exists: true,
+      scanned: true,
+      skills,
+      issues
+    };
+  }
   for (const dirent of fs.readdirSync(target.root, { withFileTypes: true })) {
+    if (dirent.isSymbolicLink()) {
+      issues.push(issue("installed_skill_symlink", "error", "Installed provider-cache skill directory is a symlink", {
+        provider: target.id,
+        skill: dirent.name,
+        path: path.join(target.root, dirent.name)
+      }));
+      continue;
+    }
     if (!dirent.isDirectory()) {
       continue;
     }
@@ -130,19 +177,117 @@ function inventoryProvider(target) {
   };
 }
 
-function loadManifestIfPresent({ manifestPath, cwd, homeDir }) {
-  if (manifestPath) {
-    return { present: true, ...readManifest(manifestPath, { cwd, homeDir }) };
+function providerTargetsForManifest(runtimeConfig, providerSelection, { cwd, homeDir }) {
+  const targets = new Map();
+  if (Array.isArray(runtimeConfig.config.configured_providers) && runtimeConfig.config.configured_providers.length > 0) {
+    const configuredSelection = resolveProviderSelection({
+      providers: runtimeConfig.config.configured_providers,
+      cwd,
+      homeDir,
+      command: "status"
+    });
+    for (const provider of configuredSelection.providers) {
+      targets.set(provider.id, provider);
+    }
   }
-  const defaultPath = path.join(cwd, "skillpress.manifest.json");
-  if (!fs.existsSync(defaultPath)) {
-    return { present: false, path: defaultPath, manifest: null };
+  for (const provider of providerSelection.providers) {
+    targets.set(provider.id, provider);
   }
-  return { present: true, ...readManifest(defaultPath, { cwd, homeDir }) };
+  return targets;
+}
+
+function loadManifestIfPresent({ manifestPath, configManifestPath, cwd, homeDir, providerTargets }) {
+  const state = readManifestDocument(manifestPath, { cwd, homeDir, configManifestPath, providerTargets });
+  return {
+    present: state.existed,
+    path: state.path,
+    location: state.location,
+    manifest: state.existed ? state.manifest : null
+  };
 }
 
 function manifestEntryKey(entry) {
   return `${entry.provider}\0${entry.installed_path}`;
+}
+
+function normalizeRelativePath(value) {
+  return String(value ?? "").replace(/\\/g, "/").replace(/^\.\//, "");
+}
+
+function toolScopedPathMatches(value, { cwd, requestedTool, sourceState }) {
+  if (!value) {
+    return false;
+  }
+  const candidate = normalizeRelativePath(value);
+  return sourceState.roots.some((root) => {
+    if (root.layout !== "tool-scoped") {
+      return false;
+    }
+    const rootPath = normalizeRelativePath(path.relative(cwd, root.path));
+    const prefix = rootPath ? `${rootPath}/${requestedTool}` : requestedTool;
+    return candidate === prefix || candidate.startsWith(`${prefix}/`);
+  });
+}
+
+function createToolScope({ requestedTool, sourceState, manifestEntries, cwd }) {
+  if (!requestedTool) {
+    return null;
+  }
+  const canonicalByPath = sourceByPath(sourceState.sources);
+  const canonicalSkillNames = new Set(sourceState.sources.map((source) => source.skill));
+  const scopedManifestKeys = new Set();
+  for (const entry of manifestEntries) {
+    const source = entry.source_path ? canonicalByPath.get(entry.source_path) : null;
+    if (
+      source?.tool === requestedTool
+      || toolScopedPathMatches(entry.source_path, { cwd, requestedTool, sourceState })
+      || toolScopedPathMatches(entry.source_root_path, { cwd, requestedTool, sourceState })
+    ) {
+      scopedManifestKeys.add(manifestEntryKey(entry));
+    }
+  }
+  return {
+    requestedTool,
+    canonicalSkillNames,
+    scopedManifestKeys
+  };
+}
+
+function manifestEntryInScope(entry, toolScope) {
+  return !toolScope || toolScope.scopedManifestKeys.has(manifestEntryKey(entry));
+}
+
+function installedSkillInScope(skill, { toolScope, manifestByPath }) {
+  if (!toolScope) {
+    return true;
+  }
+  const key = `${skill.provider}\0${skill.path}`;
+  if (manifestByPath.has(key)) {
+    return toolScope.scopedManifestKeys.has(key);
+  }
+  return skill.generated_header.fields.tool === toolScope.requestedTool
+    || toolScope.canonicalSkillNames.has(skill.skill);
+}
+
+function inventoryIssueInScope(entry, toolScope) {
+  if (!toolScope) {
+    return true;
+  }
+  return entry.skill ? toolScope.canonicalSkillNames.has(entry.skill) : false;
+}
+
+function contractIssueInScope(entry, toolScope) {
+  if (!toolScope) {
+    return true;
+  }
+  if (entry.code === "command_contract_root_outside_repo") {
+    return true;
+  }
+  if (entry.tool) {
+    return entry.tool === toolScope.requestedTool;
+  }
+  const fileTool = entry.path ? path.basename(entry.path).replace(/\.commands\.json$/, "") : null;
+  return fileTool === toolScope.requestedTool;
 }
 
 function collectSourceIssues({ sourceState, contractState, policyPacks }) {
@@ -182,9 +327,9 @@ function duplicateComparable(skill) {
 
 function collectAuxiliaryDrift({ source, manifestEntry, providerTarget }) {
   const issues = [];
-  if (!source || !manifestEntry || providerTarget?.kind === "cursor-rule") {
-    if (source?.has_auxiliary_files && manifestEntry && providerTarget?.kind === "cursor-rule") {
-      issues.push(issue("cursor_auxiliary_files_ignored", "warning", "Cursor rules cannot consume auxiliary Agent Skills files directly", {
+  if (!source || !manifestEntry || providerTarget?.supports_auxiliary_files === false) {
+    if (source?.has_auxiliary_files && manifestEntry && providerTarget?.supports_auxiliary_files === false) {
+      issues.push(issue("provider_auxiliary_files_omitted", "warning", "Provider cannot consume auxiliary Agent Skills files directly", {
         skill: manifestEntry.skill,
         provider: manifestEntry.provider,
         path: manifestEntry.installed_path
@@ -219,22 +364,77 @@ function collectAuxiliaryDrift({ source, manifestEntry, providerTarget }) {
   return issues;
 }
 
-function collectIssues({ inventory, manifestState, sourceState, contractState, policyPacks, cwd, homeDir }) {
+function combinedSourceSummary(sources) {
+  const payload = sources.map((source) => ({
+    skill: source.skill,
+    tool: source.tool,
+    source_path: source.source_path,
+    source_hash: source.source_hash,
+    skill_md_hash: source.skill_md_hash,
+    source_tree_hash: source.source_tree_hash
+  })).sort((left, right) => left.source_path.localeCompare(right.source_path));
+  const serialized = JSON.stringify(payload);
+  return {
+    source_hash: sha256(serialized),
+    skill_md_hash: sha256(payload.map((entry) => `${entry.source_path}:${entry.skill_md_hash}`).join("\n")),
+    source_tree_hash: sha256(payload.map((entry) => `${entry.source_path}:${entry.source_tree_hash}`).join("\n"))
+  };
+}
+
+function collectIssues({ inventory, manifestState, sourceState, contractState, policyPacks, cwd, homeDir, toolScope }) {
   const issues = [];
-  const skills = inventory.flatMap((provider) => provider.skills);
-  const manifestEntries = manifestState.manifest?.entries ?? [];
+  const allSkills = inventory.flatMap((provider) => provider.skills);
+  const allManifestEntries = manifestState.manifest?.entries ?? [];
+  const allManifestByPath = new Map(allManifestEntries.map((entry) => [manifestEntryKey(entry), entry]));
+  const skills = allSkills.filter((skill) => installedSkillInScope(skill, {
+    toolScope,
+    manifestByPath: allManifestByPath
+  }));
+  const manifestEntries = allManifestEntries.filter((entry) => manifestEntryInScope(entry, toolScope));
   const manifestByPath = new Map(manifestEntries.map((entry) => [manifestEntryKey(entry), entry]));
   const canonicalByPath = sourceByPath(sourceState.sources);
-  const installedKeys = new Set(skills.map((skill) => `${skill.provider}\0${skill.path}`));
+  const installedKeys = new Set(allSkills.map((skill) => `${skill.provider}\0${skill.path}`));
   const providers = providerMap(inventory);
 
   for (const entry of manifestEntries) {
+    const providerTarget = providers.get(entry.provider) ?? providerById(entry.provider, { cwd, homeDir });
     if (!installedKeys.has(manifestEntryKey(entry))) {
       issues.push(issue("installed_skill_missing", "error", "Manifest-managed installed skill is missing", {
         skill: entry.skill,
         provider: entry.provider,
         path: entry.installed_path
       }));
+    }
+    if (providerTarget.kind === "single-instructions-file") {
+      const summary = combinedSourceSummary(sourceState.sources);
+      if (entry.source_hash && entry.source_hash !== summary.source_hash) {
+        issues.push(issue("manifest_source_hash_stale", "error", "Manifest source_hash does not match current generated instructions source set", {
+          skill: entry.skill,
+          provider: entry.provider,
+          source_path: entry.source_path,
+          expected: summary.source_hash,
+          actual: entry.source_hash
+        }));
+      }
+      if (entry.skill_md_hash && entry.skill_md_hash !== summary.skill_md_hash) {
+        issues.push(issue("manifest_skill_md_hash_stale", "error", "Manifest skill_md_hash does not match current generated instructions source set", {
+          skill: entry.skill,
+          provider: entry.provider,
+          source_path: entry.source_path,
+          expected: summary.skill_md_hash,
+          actual: entry.skill_md_hash
+        }));
+      }
+      if (entry.source_tree_hash && entry.source_tree_hash !== summary.source_tree_hash) {
+        issues.push(issue("manifest_source_tree_hash_stale", "error", "Manifest source_tree_hash does not match current generated instructions source set", {
+          skill: entry.skill,
+          provider: entry.provider,
+          source_path: entry.source_path,
+          expected: summary.source_tree_hash,
+          actual: entry.source_tree_hash
+        }));
+      }
+      continue;
     }
     if (entry.source_path) {
       const source = canonicalByPath.get(entry.source_path);
@@ -295,6 +495,24 @@ function collectIssues({ inventory, manifestState, sourceState, contractState, p
       }));
     }
     const source = manifestEntry?.source_path ? canonicalByPath.get(manifestEntry.source_path) : null;
+    if (manifestEntry && providerTarget.kind === "single-instructions-file") {
+      const summary = combinedSourceSummary(sourceState.sources);
+      const installedBody = stripGeneratedHeader(skill.content);
+      const expectedBody = stripGeneratedHeader(renderSingleInstructions({
+        sources: sourceState.sources,
+        providerTarget,
+        generatedAt: "",
+        sourceSummary: summary
+      }));
+      if (installedBody !== expectedBody) {
+        issues.push(issue("installed_skill_drift", "error", "Installed instruction file differs from canonical render", {
+          skill: skill.skill,
+          provider: skill.provider,
+          path: skill.path,
+          source_path: manifestEntry.source_path
+        }));
+      }
+    }
     if (manifestEntry && source) {
       const installedBody = stripGeneratedHeader(skill.content);
       const expectedBody = expectedEntrypointBody({ source, providerTarget });
@@ -383,29 +601,39 @@ export function statusPacket(options = {}) {
     providers: options.providers,
     policyPacks: options.policyPacks
   });
+  const configManifestPath = runtimeConfig.config.manifest?.path ?? null;
   const sourceState = discoverSkillSources({ cwd, sourceRoots: runtimeConfig.config.source_roots, tool: options.tool });
   const contractState = loadCommandContracts({ cwd, contractRoot: runtimeConfig.config.contract_root });
-  const allProviders = providerTargets({ cwd, homeDir });
-  const providerIssues = [];
-  const requestedProviders = runtimeConfig.config.providers ?? (options.provider ? [options.provider] : null);
-  for (const providerId of requestedProviders ?? []) {
-    if (!allProviders.some((provider) => provider.id === providerId)) {
-      providerIssues.push(issue("unknown_provider", "error", `unknown provider '${providerId}'`, {
-        provider: providerId
-      }));
-    }
-  }
-  const providerFilter = requestedProviders ? new Set(requestedProviders) : null;
-  const providers = allProviders.filter((provider) => !providerFilter || providerFilter.has(provider.id));
+  const providerSelection = resolveProviderSelection({
+    providers: runtimeConfig.config.providers,
+    cwd,
+    homeDir,
+    command: "status"
+  });
+  const providers = providerSelection.providers;
+  const manifestProviderTargets = providerTargetsForManifest(runtimeConfig, providerSelection, { cwd, homeDir });
 
   let manifestState;
   const loadIssues = [];
   try {
-    manifestState = loadManifestIfPresent({ manifestPath: options.manifestPath, cwd, homeDir });
+    manifestState = loadManifestIfPresent({
+      manifestPath: options.manifestPath,
+      configManifestPath,
+      cwd,
+      homeDir,
+      providerTargets: manifestProviderTargets
+    });
   } catch (error) {
+    let location = null;
+    try {
+      location = resolveManifestLocation({ cwd, homeDir, manifestPath: options.manifestPath, configManifestPath });
+    } catch {
+      location = null;
+    }
     manifestState = {
       present: false,
-      path: path.resolve(cwd, options.manifestPath ?? "skillpress.manifest.json"),
+      path: location?.path ?? null,
+      location,
       manifest: null
     };
     loadIssues.push(issue(error.code ?? "manifest_invalid", "error", error.message, {
@@ -416,13 +644,37 @@ export function statusPacket(options = {}) {
   }
 
   const inventory = providers.map(inventoryProvider);
+  const manifestEntries = manifestState.manifest?.entries ?? [];
+  const toolScope = createToolScope({
+    requestedTool: options.tool ?? null,
+    sourceState,
+    manifestEntries,
+    cwd
+  });
+  const allManifestByPath = new Map(manifestEntries.map((entry) => [manifestEntryKey(entry), entry]));
+  const skills = inventory
+    .flatMap((provider) => provider.skills)
+    .filter((skill) => installedSkillInScope(skill, {
+      toolScope,
+      manifestByPath: allManifestByPath
+    }))
+    .map(({ content, ...skill }) => skill);
+  const scopedSkillCounts = skills.reduce((counts, skill) => {
+    counts.set(skill.provider, (counts.get(skill.provider) ?? 0) + 1);
+    return counts;
+  }, new Map());
   const issues = [
-    ...providerIssues,
+    ...providerSelection.issues,
     ...runtimeConfig.issues,
     ...loadIssues,
-    ...inventory.flatMap((provider) => provider.issues ?? []),
+    ...(!manifestState.location?.explicit && manifestState.location?.legacy_default_present
+      ? [issue("legacy_install_manifest_ignored", "warning", "Legacy root install manifest ignored; pass --manifest skillpress.manifest.json to inspect or migrate it explicitly", {
+        path: manifestState.location.legacy_default_path
+      })]
+      : []),
+    ...inventory.flatMap((provider) => provider.issues ?? []).filter((entry) => inventoryIssueInScope(entry, toolScope)),
     ...sourceState.issues,
-    ...contractState.issues,
+    ...contractState.issues.filter((entry) => contractIssueInScope(entry, toolScope)),
     ...collectSourceIssues({
       sourceState,
       contractState,
@@ -435,10 +687,10 @@ export function statusPacket(options = {}) {
       contractState,
       policyPacks: runtimeConfig.config.policy_packs,
       cwd,
-      homeDir
+      homeDir,
+      toolScope
     })
   ];
-  const skills = inventory.flatMap((provider) => provider.skills).map(({ content, ...skill }) => skill);
   const errorCount = issues.filter((entry) => entry.severity === "error").length;
   const warningCount = issues.filter((entry) => entry.severity === "warning").length;
   const installedCount = skills.length;
@@ -450,13 +702,17 @@ export function statusPacket(options = {}) {
     status: errorCount > 0 ? "fail" : warningCount > 0 ? "drift" : "pass",
     providers: inventory.map(({ skills: providerSkills, ...provider }) => ({
       ...provider,
-      skill_count: providerSkills.length
+      skill_count: toolScope ? scopedSkillCounts.get(provider.id) ?? 0 : providerSkills.length
     })),
     manifest: {
       present: manifestState.present,
       path: manifestState.path,
-      version: manifestState.manifest?.version ?? null,
-      entry_count: manifestState.manifest?.entries.length ?? 0
+      mode: manifestState.location?.mode ?? null,
+      explicit: manifestState.location?.explicit ?? false,
+      legacy_default_path: manifestState.location?.legacy_default_path ?? null,
+      legacy_default_present: manifestState.location?.legacy_default_present ?? false,
+      version: manifestState.present ? manifestState.manifest?.version ?? null : null,
+      entry_count: manifestState.present ? manifestState.manifest?.entries.length ?? 0 : 0
     },
     canonical_sources: {
       root: sourceState.root,
