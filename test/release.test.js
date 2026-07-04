@@ -26,6 +26,7 @@ test("GitHub CI runs generic public checks", () => {
   const workflow = fs.readFileSync(path.join(repoRoot, ".github", "workflows", "test.yml"), "utf8");
 
   assert.match(workflow, /node-version: '20'/);
+  assert.match(workflow, /actions\/checkout@v4\.2\.2/);
   assert.match(workflow, /npm test/);
   assert.match(workflow, /NPM_CONFIG_CACHE=\/tmp\/skillpress-npm-cache npm pack --dry-run --json/);
   assert.doesNotMatch(workflow, /runlane|gitea|remogram/i);
@@ -92,7 +93,7 @@ test("releasepress config exports an allowlisted public source tree", () => {
   const localBinDir = path.join("/", "Users", "attebury", "Documents", "tools", "bin");
 
   assert.equal(config.public_repo, "https://github.com/attebury/skillpress.git");
-  assert.equal(config.stage_repo, "file:///tmp/skillpress-public-stage.git");
+  assert.equal(config.stage_repo, "file:///tmp/skillpress-stage.git");
   assert.deepEqual(config.stage, {
     strategy: "replace-main",
     ref: "main"
