@@ -6,6 +6,18 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+const releasepressConfigPath = path.join(repoRoot, "releasepress.config.json");
+const exportScriptPath = path.join(repoRoot, "scripts", "export-public-main.sh");
+
+function sourceReleaseFilesAvailable() {
+  return fs.existsSync(releasepressConfigPath) && fs.existsSync(exportScriptPath);
+}
+
+function sourceReleaseOnlySkip() {
+  return sourceReleaseFilesAvailable()
+    ? false
+    : "source release config is intentionally excluded from public exports";
+}
 
 function releasepressCliAvailable() {
   const result = spawnSync("releasepress", ["boundary", "--json"], {
@@ -32,8 +44,10 @@ test("GitHub CI runs generic public checks", () => {
   assert.doesNotMatch(workflow, /runlane|gitea|remogram/i);
 });
 
-test("public export script uses an explicit public source allowlist", () => {
-  const script = fs.readFileSync(path.join(repoRoot, "scripts", "export-public-main.sh"), "utf8");
+test("public export script uses an explicit public source allowlist", {
+  skip: sourceReleaseOnlySkip()
+}, () => {
+  const script = fs.readFileSync(exportScriptPath, "utf8");
   const paths = publicExportPaths(script);
 
   for (const rel of [
@@ -86,8 +100,10 @@ test("public export script uses an explicit public source allowlist", () => {
   assert.match(script, /npm pack --dry-run --json/);
 });
 
-test("releasepress config exports an allowlisted public source tree", () => {
-  const config = JSON.parse(fs.readFileSync(path.join(repoRoot, "releasepress.config.json"), "utf8"));
+test("releasepress config exports an allowlisted public source tree", {
+  skip: sourceReleaseOnlySkip()
+}, () => {
+  const config = JSON.parse(fs.readFileSync(releasepressConfigPath, "utf8"));
   const localBinDir = path.join("/", "Users", "attebury", "Documents", "tools", "bin");
   const localStageRepo = "http://" + "localhost" + ":3000/attebury/skillpress-stage.git";
 
@@ -147,8 +163,10 @@ test("releasepress config exports an allowlisted public source tree", () => {
   }
 });
 
-test("releasepress config uses current public delivery objects", () => {
-  const config = JSON.parse(fs.readFileSync(path.join(repoRoot, "releasepress.config.json"), "utf8"));
+test("releasepress config uses current public delivery objects", {
+  skip: sourceReleaseOnlySkip()
+}, () => {
+  const config = JSON.parse(fs.readFileSync(releasepressConfigPath, "utf8"));
 
   assert.deepEqual(config.review_targets, [
     {
@@ -251,7 +269,7 @@ test("releasepress config uses current public delivery objects", () => {
 });
 
 test("releasepress config passes the installed plan contract", {
-  skip: releasepressCliAvailable() ? false : "releasepress CLI is not installed"
+  skip: sourceReleaseOnlySkip() || (releasepressCliAvailable() ? false : "releasepress CLI is not installed")
 }, () => {
   const result = spawnSync("releasepress", ["plan", "--json", "--config", "releasepress.config.json"], {
     cwd: repoRoot,
@@ -275,8 +293,10 @@ test("releasepress config passes the installed plan contract", {
   ]);
 });
 
-test("releasepress config scans local forge and token markers", () => {
-  const config = JSON.parse(fs.readFileSync(path.join(repoRoot, "releasepress.config.json"), "utf8"));
+test("releasepress config scans local forge and token markers", {
+  skip: sourceReleaseOnlySkip()
+}, () => {
+  const config = JSON.parse(fs.readFileSync(releasepressConfigPath, "utf8"));
 
   for (const marker of [
     "/Users/" + "attebury",
@@ -295,8 +315,10 @@ test("releasepress config scans local forge and token markers", () => {
   }
 });
 
-test("releasepress package surface excludes non-runtime sources", () => {
-  const config = JSON.parse(fs.readFileSync(path.join(repoRoot, "releasepress.config.json"), "utf8"));
+test("releasepress package surface excludes non-runtime sources", {
+  skip: sourceReleaseOnlySkip()
+}, () => {
+  const config = JSON.parse(fs.readFileSync(releasepressConfigPath, "utf8"));
   const npmPackage = config.artifacts.find((artifact) => artifact.id === "npm-package");
 
   assert.ok(npmPackage, "npm-package artifact must exist");
