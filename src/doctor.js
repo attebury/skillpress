@@ -38,7 +38,6 @@ export function doctorPacket(options = {}) {
             tool: options.tool ?? null
           }
         }
-      : {}),
-    ...(status.config?.diagram?.telemetry ? { config: status.config } : {})
+      : {})
   };
 }

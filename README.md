@@ -96,29 +96,6 @@ skillpress repair-plan --json
 manual-review actions without deleting or rewriting provider caches. See
 [docs/installed-hygiene.md](docs/installed-hygiene.md).
 
-## Diagram Telemetry
-
-`sync` and `doctor` can opt into local Diagram telemetry:
-
-```bash
-skillpress doctor --json --diagram-telemetry
-```
-
-Or configure:
-
-```json
-{
-  "diagram": {
-    "telemetry": true
-  }
-}
-```
-
-Skillpress emits bounded `diagram.diagnostic_event.v1` summaries only after its
-own command packet is complete. Diagram is telemetry-only and cannot change
-Skillpress command status, provider readiness, manifest drift, sync writes, or
-exit codes. See [docs/diagram-telemetry.md](docs/diagram-telemetry.md).
-
 ## Source Layouts
 
 Generic Agent Skills roots use one directory per skill:
