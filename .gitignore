@@ -7,3 +7,4 @@ coverage/
 .remogram.json
 skillpress.manifest.json
 .skillpress/
+.diagram/
