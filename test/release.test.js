@@ -35,6 +35,7 @@ test("public export script uses an explicit public source allowlist", () => {
     "bin",
     "docs/decisions/skillpress-boundary.md",
     "docs/diagram-telemetry.md",
+    "docs/installed-hygiene.md",
     "docs/operating-model.md",
     "docs/release.md",
     "examples",

@@ -17,6 +17,7 @@ PUBLIC_PATHS=(
   "bin"
   "docs/decisions/skillpress-boundary.md"
   "docs/diagram-telemetry.md"
+  "docs/installed-hygiene.md"
   "docs/operating-model.md"
   "docs/release.md"
   "examples"

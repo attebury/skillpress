@@ -2,6 +2,7 @@
 import { boundaryPacket } from "../src/boundary.js";
 import { attachDiagramTelemetry } from "../src/diagram/emitter.js";
 import { doctorPacket } from "../src/doctor.js";
+import { repairPlanPacket } from "../src/repair-plan.js";
 import { statusPacket } from "../src/status.js";
 import { syncPacket } from "../src/sync.js";
 
@@ -31,6 +32,7 @@ function usage() {
   const providerHelp = "codex|agents|cursor|claude-code|zed|github-copilot|cline|roo|continue|devin|github-copilot-instructions|agents-md";
   return [
     "skillpress boundary --json",
+    `skillpress repair-plan --json [--config <path>] [--manifest <path>] [--provider ${providerHelp}] [--tool <tool>] [--source-root <path>] [--source-layout auto|tool-scoped|agent-skills|claude-skills] [--contract-root <path>] [--policy generic|dogfood|none]`,
     `skillpress status --json [--config <path>] [--manifest <path>] [--provider ${providerHelp}] [--tool <tool>] [--source-root <path>] [--source-layout auto|tool-scoped|agent-skills|claude-skills] [--contract-root <path>] [--policy generic|dogfood|none]`,
     `skillpress doctor --json [--config <path>] [--manifest <path>] [--provider ${providerHelp}] [--tool <tool>] [--source-root <path>] [--source-layout auto|tool-scoped|agent-skills|claude-skills] [--contract-root <path>] [--policy generic|dogfood|none] [--diagram-telemetry]`,
     `skillpress sync --json [--config <path>] [--provider ${providerHelp}] [--tool <tool>] [--manifest <path>] [--source-root <path>] [--source-layout auto|tool-scoped|agent-skills|claude-skills] [--contract-root <path>] [--policy generic|dogfood|none] [--dry-run] [--diagram-telemetry]`
@@ -85,6 +87,26 @@ if (command === "--help" || command === "-h" || command === "help") {
       contractRoot: readOption(args, "--contract-root"),
       policyPacks: readOptions(args, "--policy")
     }));
+  }
+} else if (command === "repair-plan") {
+  if (!wantsJson) {
+    process.stderr.write("repair-plan currently requires --json\n");
+    process.exitCode = 2;
+  } else {
+    const packet = repairPlanPacket({
+      configPath: readOption(args, "--config"),
+      manifestPath: readOption(args, "--manifest"),
+      provider: readOption(args, "--provider"),
+      tool: readOption(args, "--tool"),
+      sourceRoot: readOption(args, "--source-root"),
+      sourceLayout: readOption(args, "--source-layout"),
+      contractRoot: readOption(args, "--contract-root"),
+      policyPacks: readOptions(args, "--policy")
+    });
+    printJson(packet);
+    if (!packet.ok) {
+      process.exitCode = 1;
+    }
   }
 } else if (command === "doctor") {
   if (!wantsJson) {

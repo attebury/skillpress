@@ -57,6 +57,7 @@ With no config, Skillpress looks for `agent-skills/src` using the
 
 ```bash
 skillpress boundary --json
+skillpress repair-plan --json
 skillpress status --json
 skillpress doctor --json
 skillpress sync --json --provider codex --tool runlane
@@ -76,6 +77,24 @@ skillpress doctor --json --policy generic
 
 Supported source layouts are `auto`, `tool-scoped`, `agent-skills`, and
 `claude-skills`.
+
+## Installed Hygiene
+
+Use scoped doctor checks for product gates:
+
+```bash
+skillpress doctor --json --tool runlane
+```
+
+Use global repair planning for machine-wide installed-skill drift:
+
+```bash
+skillpress repair-plan --json
+```
+
+`repair-plan` is read-only. It reports resync, source-config, manifest, and
+manual-review actions without deleting or rewriting provider caches. See
+[docs/installed-hygiene.md](docs/installed-hygiene.md).
 
 ## Diagram Telemetry
 
