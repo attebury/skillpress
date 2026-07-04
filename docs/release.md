@@ -21,21 +21,24 @@ local staging, and release checklist verification.
    releasepress plan --json --config releasepress.config.json
    ```
 
-3. Export, scan, inspect package contents, stage locally, and verify the report
-   bundle:
+3. Export, scan, inspect package contents, stage locally, publish the local
+   review ref, attest the inspected candidate, and verify the report bundle:
 
    ```bash
    releasepress export --json --config releasepress.config.json --out /tmp/skillpress-public-tree
    releasepress scan --json --config releasepress.config.json --path /tmp/skillpress-public-tree
    releasepress package --json --config releasepress.config.json
    releasepress stage --json --config releasepress.config.json --path /tmp/skillpress-public-tree
+   releasepress public-review --json --config releasepress.config.json --path /tmp/skillpress-public-tree
+   releasepress attest-review --json --config releasepress.config.json --path /tmp/skillpress-public-tree --approve-public-review --reviewer operator --reason "inspected Skillpress public review repo"
    releasepress checklist --json --config releasepress.config.json --path /tmp/skillpress-public-tree
    releasepress verify --json --config releasepress.config.json --path /tmp/skillpress-public-tree
    ```
 
-4. Review `/tmp/skillpress-public-tree` and its `.releasepress-report/`
-   bundle. The root `releasepress.config.json` is source-release machinery and
-   is intentionally excluded from the exported tree.
+4. Review `/tmp/skillpress-public-tree`, the local review ref configured by
+   `local-public-review`, and the `.releasepress-report/` bundle. The root
+   `releasepress.config.json` is source-release machinery and is intentionally
+   excluded from the exported tree.
 
 5. Promote the reviewed clean checkout to the local operator shim when local
    use should override the npm-global install:
@@ -66,10 +69,10 @@ local staging, and release checklist verification.
 - Publish only from a clean, committed checkout.
 - Do not include runtime forge credentials, local provider roots, generated
   manifests, lane state, or local export tooling in the exported public tree.
-- Keep public GitHub and npm promotion disabled in `releasepress.config.json`
-  unless the operator explicitly enables and approves those surfaces. Local
-  promotion may install the clean checkout as `skillpress` in the operator
-  tools bin directory.
+- Keep public GitHub and npm delivery providers disabled in
+  `releasepress.config.json` unless the operator explicitly enables and approves
+  those surfaces. Local promotion may install the clean checkout as `skillpress`
+  in the operator tools bin directory.
 - Keep the npm `files` allowlist limited to runtime package files and public
   docs.
 - Use the `beta` npm tag until external install and update flows settle.
