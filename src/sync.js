@@ -387,7 +387,8 @@ export function syncPacket(options = {}) {
     config: {
       path: runtimeConfig.path,
       present: runtimeConfig.present,
-      policy_packs: runtimeConfig.config.policy_packs
+      policy_packs: runtimeConfig.config.policy_packs,
+      ...(runtimeConfig.config.diagram.telemetry ? { diagram: { telemetry: true } } : {})
     },
     manifest: {
       path: manifestPath,

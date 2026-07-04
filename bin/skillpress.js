@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { boundaryPacket } from "../src/boundary.js";
+import { attachDiagramTelemetry } from "../src/diagram/emitter.js";
 import { doctorPacket } from "../src/doctor.js";
 import { statusPacket } from "../src/status.js";
 import { syncPacket } from "../src/sync.js";
@@ -31,9 +32,30 @@ function usage() {
   return [
     "skillpress boundary --json",
     `skillpress status --json [--config <path>] [--manifest <path>] [--provider ${providerHelp}] [--tool <tool>] [--source-root <path>] [--source-layout auto|tool-scoped|agent-skills|claude-skills] [--contract-root <path>] [--policy generic|dogfood|none]`,
-    `skillpress doctor --json [--config <path>] [--manifest <path>] [--provider ${providerHelp}] [--tool <tool>] [--source-root <path>] [--source-layout auto|tool-scoped|agent-skills|claude-skills] [--contract-root <path>] [--policy generic|dogfood|none]`,
-    `skillpress sync --json [--config <path>] [--provider ${providerHelp}] [--tool <tool>] [--manifest <path>] [--source-root <path>] [--source-layout auto|tool-scoped|agent-skills|claude-skills] [--contract-root <path>] [--policy generic|dogfood|none] [--dry-run]`
+    `skillpress doctor --json [--config <path>] [--manifest <path>] [--provider ${providerHelp}] [--tool <tool>] [--source-root <path>] [--source-layout auto|tool-scoped|agent-skills|claude-skills] [--contract-root <path>] [--policy generic|dogfood|none] [--diagram-telemetry]`,
+    `skillpress sync --json [--config <path>] [--provider ${providerHelp}] [--tool <tool>] [--manifest <path>] [--source-root <path>] [--source-layout auto|tool-scoped|agent-skills|claude-skills] [--contract-root <path>] [--policy generic|dogfood|none] [--dry-run] [--diagram-telemetry]`
   ].join("\n");
+}
+
+function wantsDiagramTelemetry(args, packet) {
+  return args.includes("--diagram-telemetry") || packet.config?.diagram?.telemetry === true;
+}
+
+function maybeAttachDiagramTelemetry(packet, args, command) {
+  if (!wantsDiagramTelemetry(args, packet)) {
+    return packet;
+  }
+  const telemetryPacket = {
+    ...packet,
+    filters: packet.filters ?? {
+      provider: readOption(args, "--provider"),
+      tool: readOption(args, "--tool")
+    }
+  };
+  return attachDiagramTelemetry(telemetryPacket, {
+    cwd: process.cwd(),
+    command: `skillpress ${command} --json`
+  });
 }
 
 const [command, ...args] = process.argv.slice(2);
@@ -79,7 +101,7 @@ if (command === "--help" || command === "-h" || command === "help") {
       contractRoot: readOption(args, "--contract-root"),
       policyPacks: readOptions(args, "--policy")
     });
-    printJson(packet);
+    printJson(maybeAttachDiagramTelemetry(packet, args, "doctor"));
     if (!packet.ok) {
       process.exitCode = 1;
     }
@@ -101,7 +123,7 @@ if (command === "--help" || command === "-h" || command === "help") {
         policyPacks: readOptions(args, "--policy"),
         dryRun: args.includes("--dry-run")
       });
-      printJson(packet);
+      printJson(maybeAttachDiagramTelemetry(packet, args, "sync"));
       if (!packet.ok) {
         process.exitCode = 1;
       }

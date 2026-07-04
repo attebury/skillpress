@@ -16,6 +16,7 @@ PUBLIC_PATHS=(
   "SECURITY.md"
   "bin"
   "docs/decisions/skillpress-boundary.md"
+  "docs/diagram-telemetry.md"
   "docs/operating-model.md"
   "docs/release.md"
   "examples"

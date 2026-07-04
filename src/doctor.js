@@ -30,6 +30,15 @@ export function doctorPacket(options = {}) {
       warnings,
       advisories: findings.filter((entry) => entry.severity === "advisory").length
     },
-    status_summary: status.summary
+    status_summary: status.summary,
+    ...(options.provider || options.tool
+      ? {
+          filters: {
+            provider: options.provider ?? null,
+            tool: options.tool ?? null
+          }
+        }
+      : {}),
+    ...(status.config?.diagram?.telemetry ? { config: status.config } : {})
   };
 }
