@@ -91,9 +91,10 @@ test("public export script uses an explicit public source allowlist", () => {
 test("releasepress config exports an allowlisted public source tree", () => {
   const config = JSON.parse(fs.readFileSync(path.join(repoRoot, "releasepress.config.json"), "utf8"));
   const localBinDir = path.join("/", "Users", "attebury", "Documents", "tools", "bin");
+  const localStageRepo = "http://" + "localhost" + ":3000/attebury/skillpress-stage.git";
 
   assert.equal(config.public_repo, "https://github.com/attebury/skillpress.git");
-  assert.equal(config.stage_repo, "file:///tmp/skillpress-stage.git");
+  assert.equal(config.stage_repo, localStageRepo);
   assert.deepEqual(config.stage, {
     strategy: "replace-main",
     ref: "main"
