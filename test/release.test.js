@@ -70,6 +70,7 @@ test("public export script uses an explicit public source allowlist", () => {
     ".claude",
     ".gitea",
     ".tmp",
+    ".diagram",
     "coverage",
     "node_modules"
   ]) {
@@ -133,6 +134,7 @@ test("releasepress config exports an allowlisted public source tree", () => {
     ".codex/**",
     ".agents/**",
     ".claude/**",
+    ".diagram/**",
     "node_modules/**",
     "coverage/**",
     ".releasepress-report/**",
@@ -178,6 +180,7 @@ test("releasepress config uses current public delivery objects", () => {
         ".codex/",
         ".agents/",
         ".claude/",
+        ".diagram/",
         ".releasepress-report/",
         ".remogram.json",
         "skillpress.manifest.json",
@@ -290,6 +293,7 @@ test("releasepress package surface excludes non-runtime sources", () => {
     ".codex/",
     ".agents/",
     ".claude/",
+    ".diagram/",
     ".releasepress-report/",
     ".remogram.json",
     "skillpress.manifest.json",
