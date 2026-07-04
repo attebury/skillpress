@@ -76,6 +76,7 @@ test("public export script uses an explicit public source allowlist", () => {
 
 test("releasepress config exports an allowlisted public source tree", () => {
   const config = JSON.parse(fs.readFileSync(path.join(repoRoot, "releasepress.config.json"), "utf8"));
+  const localBinDir = path.join("/", "Users", "attebury", "Documents", "tools", "bin");
 
   assert.equal(config.public_repo, "https://github.com/attebury/skillpress.git");
   assert.equal(config.stage_repo, "file:///tmp/skillpress-public-stage.git");
@@ -87,7 +88,7 @@ test("releasepress config exports an allowlisted public source tree", () => {
     strategy: "bin_shim",
     source: "source",
     command_name: "skillpress",
-    bin_dir: "/Users/attebury/Documents/tools/bin",
+    bin_dir: localBinDir,
     target: "bin/skillpress.js"
   });
 
