@@ -2,9 +2,19 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+
+function releasepressCliAvailable() {
+  const result = spawnSync("releasepress", ["boundary", "--json"], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    shell: false
+  });
+  return result.error?.code !== "ENOENT";
+}
 
 function publicExportPaths(script) {
   const match = script.match(/PUBLIC_PATHS=\(\n([\s\S]*?)\n\)/);
@@ -82,9 +92,13 @@ test("releasepress config exports an allowlisted public source tree", () => {
 
   assert.equal(config.public_repo, "https://github.com/attebury/skillpress.git");
   assert.equal(config.stage_repo, "file:///tmp/skillpress-public-stage.git");
-  assert.deepEqual(config.package.argv, ["npm", "pack", "--dry-run", "--json"]);
-  assert.equal(config.surfaces.github.enabled, false);
-  assert.equal(config.surfaces.npm.enabled, false);
+  assert.deepEqual(config.stage, {
+    strategy: "replace-main",
+    ref: "main"
+  });
+  assert.equal(Object.hasOwn(config, "package"), false);
+  assert.equal(Object.hasOwn(config.surfaces, "github"), false);
+  assert.equal(Object.hasOwn(config.surfaces, "npm"), false);
   assert.deepEqual(config.surfaces.local, {
     enabled: true,
     strategy: "bin_shim",
@@ -132,6 +146,114 @@ test("releasepress config exports an allowlisted public source tree", () => {
   }
 });
 
+test("releasepress config uses current public delivery objects", () => {
+  const config = JSON.parse(fs.readFileSync(path.join(repoRoot, "releasepress.config.json"), "utf8"));
+
+  assert.deepEqual(config.review_targets, [
+    {
+      id: "local-public-review",
+      kind: "git_ref",
+      repo: "file:///tmp/skillpress-public-review.git",
+      visibility: "local",
+      strategy: "replace-ref",
+      ref: "release/stable",
+      requires_human_attestation: true
+    }
+  ]);
+
+  assert.deepEqual(config.artifacts, [
+    {
+      id: "npm-package",
+      kind: "npm_pack",
+      inspect_argv: ["npm", "pack", "--dry-run", "--json"],
+      root: "source",
+      path: ".",
+      must_exclude: [
+        "scripts/",
+        "examples/",
+        "test/",
+        ".github/",
+        ".runlane/",
+        ".cursor/",
+        ".codex/",
+        ".agents/",
+        ".claude/",
+        ".releasepress-report/",
+        ".remogram.json",
+        "skillpress.manifest.json",
+        "skillpress.config.json",
+        "releasepress.config.json"
+      ]
+    }
+  ]);
+
+  assert.deepEqual(config.delivery.providers, [
+    {
+      id: "github-public",
+      kind: "git_host",
+      provider: "github",
+      enabled: false,
+      review_target: "local-public-review",
+      repo: "attebury/skillpress",
+      branch: "main",
+      ref: "main",
+      remote_name: "origin",
+      allow_force_push: false,
+      launch_root: "export",
+      launch_path: ".",
+      release: {
+        latest_policy: "beta_as_latest"
+      },
+      verify: {
+        kind: "git_ref",
+        remote: "git@github.com:attebury/skillpress.git",
+        ref: "refs/heads/{branch}"
+      }
+    },
+    {
+      id: "npm-beta",
+      kind: "package_registry",
+      provider: "npm",
+      enabled: false,
+      review_target: "local-public-review",
+      artifact: "npm-package",
+      channel: "beta",
+      dist_tag: "beta",
+      workspace: false,
+      launch_root: "source",
+      launch_path: ".",
+      verify: {
+        kind: "argv",
+        command_argv: ["npm", "view", "skillpress", "dist-tags", "--json"],
+        expect: {
+          beta: "{version}"
+        }
+      }
+    }
+  ]);
+});
+
+test("releasepress config passes the installed plan contract", {
+  skip: releasepressCliAvailable() ? false : "releasepress CLI is not installed"
+}, () => {
+  const result = spawnSync("releasepress", ["plan", "--json", "--config", "releasepress.config.json"], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    shell: false
+  });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const packet = JSON.parse(result.stdout);
+  assert.equal(packet.ok, true);
+  assert.equal(packet.stage.strategy, "replace-main");
+  assert.equal(packet.public_review.id, "local-public-review");
+  assert.equal(packet.artifacts[0].id, "npm-package");
+  assert.deepEqual(packet.delivery.providers.map((provider) => [provider.id, provider.enabled]), [
+    ["github-public", false],
+    ["npm-beta", false]
+  ]);
+});
+
 test("releasepress config scans local forge and token markers", () => {
   const config = JSON.parse(fs.readFileSync(path.join(repoRoot, "releasepress.config.json"), "utf8"));
 
@@ -154,6 +276,9 @@ test("releasepress config scans local forge and token markers", () => {
 
 test("releasepress package surface excludes non-runtime sources", () => {
   const config = JSON.parse(fs.readFileSync(path.join(repoRoot, "releasepress.config.json"), "utf8"));
+  const npmPackage = config.artifacts.find((artifact) => artifact.id === "npm-package");
+
+  assert.ok(npmPackage, "npm-package artifact must exist");
 
   for (const rel of [
     "scripts/",
@@ -171,7 +296,7 @@ test("releasepress package surface excludes non-runtime sources", () => {
     "skillpress.config.json",
     "releasepress.config.json"
   ]) {
-    assert.ok(config.package.must_exclude.includes(rel), `${rel} must be excluded from npm package`);
+    assert.ok(npmPackage.must_exclude.includes(rel), `${rel} must be excluded from npm package`);
   }
 });
 
@@ -184,6 +309,8 @@ test("release docs describe releasepress beta flow", () => {
   assert.match(docs, /releasepress scan --json --config releasepress\.config\.json/);
   assert.match(docs, /releasepress package --json --config releasepress\.config\.json/);
   assert.match(docs, /releasepress stage --json --config releasepress\.config\.json/);
+  assert.match(docs, /releasepress public-review --json --config releasepress\.config\.json/);
+  assert.match(docs, /releasepress attest-review --json --config releasepress\.config\.json/);
   assert.match(docs, /releasepress checklist --json --config releasepress\.config\.json/);
   assert.match(docs, /releasepress verify --json --config releasepress\.config\.json/);
   assert.match(docs, /releasepress promote local --json --config releasepress\.config\.json/);
