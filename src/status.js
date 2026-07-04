@@ -75,6 +75,17 @@ function inventoryProvider(target) {
   if (target.kind === "rule-directory") {
     for (const dirent of fs.readdirSync(target.root, { withFileTypes: true })) {
       const extension = target.extension ?? ".md";
+      if (dirent.isSymbolicLink()) {
+        const skill = dirent.name.endsWith(extension)
+          ? dirent.name.slice(0, -extension.length)
+          : dirent.name;
+        issues.push(issue("installed_skill_symlink", "error", "Installed provider-cache skill entry is a symlink", {
+          provider: target.id,
+          skill,
+          path: path.join(target.root, dirent.name)
+        }));
+        continue;
+      }
       if (!dirent.isFile() || !dirent.name.endsWith(extension)) {
         continue;
       }
@@ -104,6 +115,20 @@ function inventoryProvider(target) {
   }
   if (target.kind === "single-instructions-file") {
     const skillPath = path.join(target.root, target.entrypoint ?? "AGENTS.skillpress.md");
+    if (isPathInside(skillPath, target.root) && fs.existsSync(skillPath) && fs.lstatSync(skillPath).isSymbolicLink()) {
+      issues.push(issue("installed_skill_symlink", "error", "Installed provider-cache instruction file is a symlink", {
+        provider: target.id,
+        skill: target.single_skill_id ?? "skillpress-instructions",
+        path: skillPath
+      }));
+      return {
+        ...target,
+        exists: true,
+        scanned: true,
+        skills,
+        issues
+      };
+    }
     if (isPathInside(skillPath, target.root) && fs.existsSync(skillPath)) {
       skills.push(readSkillFile(skillPath, target.id, target.root, target.single_skill_id ?? "skillpress-instructions"));
     }
@@ -116,6 +141,14 @@ function inventoryProvider(target) {
     };
   }
   for (const dirent of fs.readdirSync(target.root, { withFileTypes: true })) {
+    if (dirent.isSymbolicLink()) {
+      issues.push(issue("installed_skill_symlink", "error", "Installed provider-cache skill directory is a symlink", {
+        provider: target.id,
+        skill: dirent.name,
+        path: path.join(target.root, dirent.name)
+      }));
+      continue;
+    }
     if (!dirent.isDirectory()) {
       continue;
     }

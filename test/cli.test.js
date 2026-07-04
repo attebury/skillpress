@@ -17,6 +17,7 @@ test("top-level help prints usage and exits cleanly", () => {
 
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /skillpress boundary --json/);
+  assert.match(result.stdout, /skillpress repair-plan --json/);
   assert.match(result.stdout, /--source-layout auto\|tool-scoped\|agent-skills\|claude-skills/);
   assert.equal(result.stderr, "");
 });
