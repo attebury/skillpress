@@ -47,17 +47,21 @@ local staging, and release checklist verification.
    releasepress promote local --json --config releasepress.config.json --path /tmp/skillpress-public-tree --approve-local
    ```
 
-6. Push the reviewed exported tree to GitHub and confirm GitHub Actions pass on
-   `main`.
-
-7. Publish the beta package only after the exported tree and package surface
-   are accepted:
+6. Launch the reviewed providers only after the report bundle verifies and the
+   operator approves the exact public surfaces:
 
    ```bash
-   npm publish --tag beta
+   releasepress promote provider github-public --json --config releasepress.config.json --path /tmp/skillpress-public-tree --approve-public github-public
+   releasepress promote provider npm-beta --json --config releasepress.config.json --path /tmp/skillpress-public-tree --approve-public npm-beta
    ```
 
-8. Smoke install:
+   To launch every enabled public provider in one gated operation:
+
+   ```bash
+   releasepress promote public --json --config releasepress.config.json --path /tmp/skillpress-public-tree --approve-public public
+   ```
+
+7. Confirm GitHub Actions pass on `main`, then smoke install:
 
    ```bash
    npm install -g skillpress@beta
@@ -69,10 +73,13 @@ local staging, and release checklist verification.
 - Publish only from a clean, committed checkout.
 - Do not include runtime forge credentials, local provider roots, generated
   manifests, lane state, or local export tooling in the exported public tree.
-- Keep public GitHub and npm delivery providers disabled in
-  `releasepress.config.json` unless the operator explicitly enables and approves
-  those surfaces. Local promotion may install the clean checkout as `skillpress`
-  in the operator tools bin directory.
+- Keep GitHub and npm delivery in Releasepress provider entries. Public launch
+  still requires explicit `releasepress promote provider <id>` or
+  `releasepress promote public` approval after review attestation and verify
+  pass. Local promotion may install the clean checkout as `skillpress` in the
+  operator tools bin directory.
+- The configured `npm-beta` provider launcher runs `npm publish --tag beta`
+  only inside the Releasepress provider gate.
 - Keep the npm `files` allowlist limited to runtime package files and public
   docs.
 - Use the `beta` npm tag until external install and update flows settle.
