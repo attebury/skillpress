@@ -727,8 +727,7 @@ export function statusPacket(options = {}) {
     config: {
       path: runtimeConfig.path,
       present: runtimeConfig.present,
-      policy_packs: runtimeConfig.config.policy_packs,
-      ...(runtimeConfig.config.diagram.telemetry ? { diagram: { telemetry: true } } : {})
+      policy_packs: runtimeConfig.config.policy_packs
     },
     skills,
     issues,

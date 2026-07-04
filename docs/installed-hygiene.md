@@ -25,6 +25,3 @@ delete files, rewrite provider roots, mutate manifests, or make `doctor` pass.
 Do not hand-edit installed provider roots as canonical source. If a repair plan
 points at duplicate conflicts or unmanaged installs, inspect canonical source
 and rerun `skillpress sync` before considering any manual cleanup.
-
-Issue #20 was opened from a Diagram friction event. Diagram remains telemetry
-only; it cannot approve, block, or execute repair actions.

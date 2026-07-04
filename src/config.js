@@ -43,9 +43,6 @@ function defaultConfig() {
     providers: null,
     manifest: {
       path: null
-    },
-    diagram: {
-      telemetry: false
     }
   };
 }
@@ -188,33 +185,6 @@ function normalizeProviders(document, overrides, issues) {
   return providers;
 }
 
-function normalizeDiagramConfig(document, issues) {
-  if (document?.diagram === undefined) {
-    return defaultConfig().diagram;
-  }
-  if (!document.diagram || typeof document.diagram !== "object" || Array.isArray(document.diagram)) {
-    issues.push(configIssue("config_invalid_diagram", "error", "diagram config must be an object"));
-    return defaultConfig().diagram;
-  }
-  for (const key of Object.keys(document.diagram)) {
-    if (key !== "telemetry" || /hook|command/i.test(key)) {
-      issues.push(configIssue("config_invalid_diagram_field", "error", "diagram config field is not supported", {
-        field: key
-      }));
-    }
-  }
-  if (document.diagram.telemetry === undefined || document.diagram.telemetry === null) {
-    return defaultConfig().diagram;
-  }
-  if (typeof document.diagram.telemetry !== "boolean") {
-    issues.push(configIssue("config_invalid_diagram_telemetry", "error", "diagram.telemetry must be a boolean"));
-    return defaultConfig().diagram;
-  }
-  return {
-    telemetry: document.diagram.telemetry
-  };
-}
-
 function providerId(entry) {
   return typeof entry === "string" ? entry : entry?.id;
 }
@@ -245,7 +215,6 @@ export function resolveRuntimeConfig(options = {}) {
       ? options.providers
       : configuredProviders;
   const manifest = normalizeManifestConfig(document, issues);
-  const diagram = normalizeDiagramConfig(document, issues);
 
   return {
     path: configState.path,
@@ -256,8 +225,7 @@ export function resolveRuntimeConfig(options = {}) {
       policy_packs: policyPacks,
       providers,
       configured_providers: configuredProviders,
-      manifest,
-      diagram
+      manifest
     },
     issues
   };
