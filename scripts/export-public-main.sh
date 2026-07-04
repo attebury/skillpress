@@ -7,6 +7,24 @@ OUT="${1:-/tmp/skillpress-public}"
 GITHUB_REMOTE="${GITHUB_REMOTE:-git@github.com:attebury/skillpress.git}"
 NPM_CACHE="${NPM_CONFIG_CACHE:-/tmp/skillpress-npm-cache}"
 
+PUBLIC_PATHS=(
+  ".github/workflows/test.yml"
+  ".gitignore"
+  ".remogram.json.example"
+  "LICENSE"
+  "README.md"
+  "SECURITY.md"
+  "bin"
+  "docs/decisions/skillpress-boundary.md"
+  "docs/operating-model.md"
+  "docs/release.md"
+  "examples"
+  "llms.txt"
+  "package.json"
+  "src"
+  "test"
+)
+
 if [ -n "$(git -C "${ROOT}" status --porcelain)" ]; then
   echo "Public export requires a clean committed checkout because it exports HEAD." >&2
   exit 1
@@ -16,11 +34,8 @@ echo "Exporting public tree to ${OUT}..."
 rm -rf "${OUT}"
 mkdir -p "${OUT}"
 
-git -C "${ROOT}" archive HEAD | tar -x -C "${OUT}"
+git -C "${ROOT}" archive HEAD -- "${PUBLIC_PATHS[@]}" | tar -x -C "${OUT}"
 cd "${OUT}"
-
-rm -rf .runlane .cursor .codex .agents .claude .gitea .tmp coverage node_modules
-rm -f .remogram.json skillpress.manifest.json
 
 FORBIDDEN_PATTERNS=(
   '/Users/'"attebury"

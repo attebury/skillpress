@@ -1,0 +1,111 @@
+{
+  "public_repo": "https://github.com/attebury/skillpress.git",
+  "stage_repo": "file:///tmp/skillpress-public-stage.git",
+  "include": [
+    ".github/workflows/test.yml",
+    ".gitignore",
+    ".remogram.json.example",
+    "LICENSE",
+    "README.md",
+    "SECURITY.md",
+    "bin/**",
+    "docs/**",
+    "examples/**",
+    "llms.txt",
+    "package.json",
+    "src/**",
+    "test/**"
+  ],
+  "exclude": [
+    ".runlane/**",
+    ".remogram.json",
+    ".cursor/**",
+    ".codex/**",
+    ".agents/**",
+    ".claude/**",
+    ".gitea/**",
+    ".tmp/**",
+    "node_modules/**",
+    "coverage/**",
+    ".releasepress-report/**",
+    "skillpress.manifest.json",
+    "**/skillpress.manifest.json",
+    "skillpress.config.json",
+    "releasepress.config.json",
+    "scripts/**"
+  ],
+  "forbidden_strings": [
+    "/Users/attebury",
+    "localhost:3000",
+    "http://localhost",
+    "127.0.0.1:3000",
+    ".runlane/forge-authority",
+    "GITEA_TOKEN",
+    "REMOGRAM_OPERATOR_CONFIG",
+    "GITHUB_TOKEN",
+    "NPM_TOKEN",
+    "skillpress-internal.git",
+    "skillpress-private.git"
+  ],
+  "package": {
+    "argv": ["npm", "pack", "--dry-run", "--json"],
+    "must_exclude": [
+      "scripts/",
+      "examples/",
+      "test/",
+      ".github/",
+      ".runlane/",
+      ".cursor/",
+      ".codex/",
+      ".agents/",
+      ".claude/",
+      ".releasepress-report/",
+      ".remogram.json",
+      "skillpress.manifest.json",
+      "skillpress.config.json",
+      "releasepress.config.json"
+    ]
+  },
+  "version": {
+    "source": "source",
+    "file": "package.json",
+    "field": "version"
+  },
+  "preflight": {
+    "enabled": false
+  },
+  "surfaces": {
+    "github": {
+      "enabled": false,
+      "repo": "attebury/skillpress",
+      "branch": "main",
+      "remote_name": "origin",
+      "allow_force_push": false,
+      "release": {
+        "latest_policy": "beta_as_latest"
+      }
+    },
+    "npm": {
+      "enabled": false,
+      "dist_tag": "beta",
+      "workspace": false,
+      "publish_root": "source",
+      "publish_path": ".",
+      "command_argv": ["npm", "publish", "--tag", "beta"],
+      "verify": {
+        "command_argv": ["npm", "view", "skillpress", "dist-tags", "--json"],
+        "expect": {
+          "beta": "{version}"
+        }
+      }
+    },
+    "local": {
+      "enabled": true,
+      "strategy": "bin_shim",
+      "source": "source",
+      "command_name": "skillpress",
+      "bin_dir": "/Users/attebury/Documents/tools/bin",
+      "target": "bin/skillpress.js"
+    }
+  }
+}
