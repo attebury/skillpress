@@ -113,7 +113,7 @@
         "id": "github-public",
         "kind": "git_host",
         "provider": "github",
-        "enabled": false,
+        "enabled": true,
         "review_target": "local-public-review",
         "repo": "attebury/skillpress",
         "branch": "main",
@@ -122,6 +122,14 @@
         "allow_force_push": false,
         "launch_root": "export",
         "launch_path": ".",
+        "launcher": {
+          "command_argv": [
+            "git",
+            "push",
+            "git@github.com:attebury/skillpress.git",
+            "HEAD:refs/heads/main"
+          ]
+        },
         "release": {
           "latest_policy": "beta_as_latest"
         },
@@ -135,7 +143,7 @@
         "id": "npm-beta",
         "kind": "package_registry",
         "provider": "npm",
-        "enabled": false,
+        "enabled": true,
         "review_target": "local-public-review",
         "artifact": "npm-package",
         "channel": "beta",
@@ -143,6 +151,14 @@
         "workspace": false,
         "launch_root": "source",
         "launch_path": ".",
+        "launcher": {
+          "command_argv": [
+            "npm",
+            "publish",
+            "--tag",
+            "beta"
+          ]
+        },
         "verify": {
           "kind": "argv",
           "command_argv": ["npm", "view", "skillpress", "dist-tags", "--json"],

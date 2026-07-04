@@ -195,7 +195,7 @@ test("releasepress config uses current public delivery objects", () => {
       id: "github-public",
       kind: "git_host",
       provider: "github",
-      enabled: false,
+      enabled: true,
       review_target: "local-public-review",
       repo: "attebury/skillpress",
       branch: "main",
@@ -204,6 +204,14 @@ test("releasepress config uses current public delivery objects", () => {
       allow_force_push: false,
       launch_root: "export",
       launch_path: ".",
+      launcher: {
+        command_argv: [
+          "git",
+          "push",
+          "git@github.com:attebury/skillpress.git",
+          "HEAD:refs/heads/main"
+        ]
+      },
       release: {
         latest_policy: "beta_as_latest"
       },
@@ -217,7 +225,7 @@ test("releasepress config uses current public delivery objects", () => {
       id: "npm-beta",
       kind: "package_registry",
       provider: "npm",
-      enabled: false,
+      enabled: true,
       review_target: "local-public-review",
       artifact: "npm-package",
       channel: "beta",
@@ -225,6 +233,14 @@ test("releasepress config uses current public delivery objects", () => {
       workspace: false,
       launch_root: "source",
       launch_path: ".",
+      launcher: {
+        command_argv: [
+          "npm",
+          "publish",
+          "--tag",
+          "beta"
+        ]
+      },
       verify: {
         kind: "argv",
         command_argv: ["npm", "view", "skillpress", "dist-tags", "--json"],
@@ -252,8 +268,12 @@ test("releasepress config passes the installed plan contract", {
   assert.equal(packet.public_review.id, "local-public-review");
   assert.equal(packet.artifacts[0].id, "npm-package");
   assert.deepEqual(packet.delivery.providers.map((provider) => [provider.id, provider.enabled]), [
-    ["github-public", false],
-    ["npm-beta", false]
+    ["github-public", true],
+    ["npm-beta", true]
+  ]);
+  assert.deepEqual(packet.delivery.providers.map((provider) => [provider.id, provider.launcher_argv]), [
+    ["github-public", ["git", "push", "git@github.com:attebury/skillpress.git", "HEAD:refs/heads/main"]],
+    ["npm-beta", ["npm", "publish", "--tag", "beta"]]
   ]);
 });
 
@@ -318,6 +338,9 @@ test("release docs describe releasepress beta flow", () => {
   assert.match(docs, /releasepress checklist --json --config releasepress\.config\.json/);
   assert.match(docs, /releasepress verify --json --config releasepress\.config\.json/);
   assert.match(docs, /releasepress promote local --json --config releasepress\.config\.json/);
+  assert.match(docs, /releasepress promote provider github-public --json --config releasepress\.config\.json/);
+  assert.match(docs, /releasepress promote provider npm-beta --json --config releasepress\.config\.json/);
+  assert.match(docs, /releasepress promote public --json --config releasepress\.config\.json/);
   assert.match(docs, /npm pack --dry-run --json/);
   assert.match(docs, /npm publish --tag beta/);
   assert.match(docs, /npm install -g skillpress@beta/);
