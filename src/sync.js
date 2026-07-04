@@ -74,6 +74,7 @@ export function syncPacket(options = {}) {
     providers: options.providers,
     policyPacks: options.policyPacks
   });
+  const configManifestPath = runtimeConfig.config.manifest?.path ?? null;
   const sourceState = discoverSkillSources({
     cwd,
     sourceRoots: runtimeConfig.config.source_roots,
@@ -196,9 +197,16 @@ export function syncPacket(options = {}) {
   }
 
   let manifestPath = null;
+  let manifestLocation = null;
   if (!issues.some((entry) => entry.severity === "error")) {
-    const manifestState = readManifestDocument(options.manifestPath, { cwd, homeDir });
+    const manifestState = readManifestDocument(options.manifestPath, { cwd, homeDir, configManifestPath });
     manifestPath = manifestState.path;
+    manifestLocation = manifestState.location;
+    if (!manifestState.location.explicit && manifestState.location.legacy_default_present) {
+      issues.push(syncIssue("legacy_install_manifest_ignored", "warning", "Legacy root install manifest ignored; pass --manifest skillpress.manifest.json to inspect or migrate it explicitly", {
+        path: manifestState.location.legacy_default_path
+      }));
+    }
     const existingEntries = manifestState.manifest.entries.map((entry) => {
       const target = providerById(entry.provider, { cwd, homeDir });
       return {
@@ -218,7 +226,7 @@ export function syncPacket(options = {}) {
           atomicWriteFile(file.installed_path, file.content);
         }
       }
-      writeManifestDocument(options.manifestPath, document, { cwd, homeDir });
+      writeManifestDocument(options.manifestPath, document, { cwd, homeDir, configManifestPath });
     }
   }
 
@@ -239,6 +247,10 @@ export function syncPacket(options = {}) {
     },
     manifest: {
       path: manifestPath,
+      mode: manifestLocation?.mode ?? null,
+      explicit: manifestLocation?.explicit ?? false,
+      legacy_default_path: manifestLocation?.legacy_default_path ?? null,
+      legacy_default_present: manifestLocation?.legacy_default_present ?? false,
       updated: errorCount === 0 && !dryRun,
       entry_count: newManifestEntries.length
     },

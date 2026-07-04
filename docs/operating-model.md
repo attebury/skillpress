@@ -75,3 +75,10 @@ write target and records installed entrypoint, installed root, copied files,
 skill entrypoint hash, source tree hash, and optional source commit. Changes to
 manifest fields, provider layouts, or generated headers need tests that cover
 old bad input and the intended new shape.
+
+Install manifests are local runtime receipts, not canonical source. Default
+sync/status/doctor manifest discovery writes and reads Git-local state via
+`git rev-parse --git-path skillpress/install-manifest.local.json`, with an XDG
+state fallback outside Git worktrees. Root `skillpress.manifest.json` is a
+legacy explicit path only; implicit commands warn and ignore it so provider
+sync does not dirty product source checkouts.

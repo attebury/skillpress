@@ -73,8 +73,10 @@ test("sync JSON command installs a canonical skill into an isolated provider roo
   const packet = JSON.parse(sync.stdout);
   assert.equal(packet.type, "skillpress_sync");
   assert.equal(packet.summary.write_count, 1);
+  assert.equal(packet.manifest.mode, "xdg-state");
   assert.equal(fs.existsSync(path.join(homeDir, ".codex", "skills", "runlane-consumer", "SKILL.md")), true);
-  assert.equal(fs.existsSync(path.join(cwd, "skillpress.manifest.json")), true);
+  assert.equal(fs.existsSync(packet.manifest.path), true);
+  assert.equal(fs.existsSync(path.join(cwd, "skillpress.manifest.json")), false);
 });
 
 test("CLI sync can add codex after cursor manifest normalization", () => {
@@ -107,9 +109,11 @@ test("CLI sync can add codex after cursor manifest normalization", () => {
     encoding: "utf8"
   });
   assert.equal(codexSync.status, 0, codexSync.stderr || codexSync.stdout);
+  const codexPacket = JSON.parse(codexSync.stdout);
 
-  const manifest = JSON.parse(fs.readFileSync(path.join(cwd, "skillpress.manifest.json"), "utf8"));
+  const manifest = JSON.parse(fs.readFileSync(codexPacket.manifest.path, "utf8"));
   assert.deepEqual(manifest.entries.map((entry) => entry.provider).sort(), ["codex", "cursor"]);
+  assert.equal(fs.existsSync(path.join(cwd, "skillpress.manifest.json")), false);
 
   const doctor = spawnSync(process.execPath, [cli, "doctor", "--json", "--tool", "remogram"], {
     cwd,
@@ -183,7 +187,8 @@ test("CLI accepts source layout, policy, config, and cursor provider options", (
   fs.writeFileSync(path.join(cwd, "skillpress.config.json"), JSON.stringify({
     source_roots: [{ path: "skills", layout: "agent-skills" }],
     policy_packs: ["generic"],
-    providers: ["cursor"]
+    providers: ["cursor"],
+    manifest: { path: ".skillpress/install-manifest.local.json" }
   }));
   const env = { ...process.env, HOME: homeDir };
 
@@ -206,6 +211,10 @@ test("CLI accepts source layout, policy, config, and cursor provider options", (
   });
 
   assert.equal(sync.status, 0, sync.stderr || sync.stdout);
+  const packet = JSON.parse(sync.stdout);
+  assert.equal(packet.manifest.mode, "explicit");
+  assert.equal(packet.manifest.path, fs.realpathSync(path.join(cwd, ".skillpress", "install-manifest.local.json")));
+  assert.equal(fs.existsSync(packet.manifest.path), true);
   assert.equal(fs.existsSync(path.join(cwd, ".cursor", "rules", "skillpress", "alpha.mdc")), true);
 });
 
