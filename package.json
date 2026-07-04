@@ -29,7 +29,7 @@
     "llms.txt"
   ],
   "bin": {
-    "skillpress": "./bin/skillpress.js"
+    "skillpress": "bin/skillpress.js"
   },
   "publishConfig": {
     "access": "public"
