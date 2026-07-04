@@ -24,7 +24,7 @@ Skillpress is not a skill authoring system, a CLI promoter, a workflow orchestra
 
 ## Release
 
-- [Release process](https://raw.githubusercontent.com/attebury/skillpress/main/docs/release.md): Public export, GitHub push, beta npm publish, and smoke install steps.
+- [Release process](https://raw.githubusercontent.com/attebury/skillpress/main/docs/release.md): Public verification, beta npm publish, and smoke install steps.
 - [Security policy](https://raw.githubusercontent.com/attebury/skillpress/main/SECURITY.md): Supported security surface and reporting path.
 - [Package metadata](https://raw.githubusercontent.com/attebury/skillpress/main/package.json): Runtime package metadata, npm package allowlist, and test scripts.
 
