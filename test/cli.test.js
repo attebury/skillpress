@@ -52,6 +52,7 @@ test("sync JSON command installs a canonical skill into an isolated provider roo
   const homeDir = path.join(root, "home");
   fs.mkdirSync(path.join(cwd, "agent-skills", "src", "runlane", "runlane-consumer"), { recursive: true });
   fs.mkdirSync(homeDir, { recursive: true });
+  fs.mkdirSync(path.join(homeDir, ".codex"), { recursive: true });
   fs.writeFileSync(path.join(cwd, "agent-skills", "src", "runlane", "runlane-consumer", "SKILL.md"), [
     "---",
     "name: runlane-consumer",
@@ -85,6 +86,7 @@ test("CLI sync can add codex after cursor manifest normalization", () => {
   const homeDir = path.join(root, "home");
   fs.mkdirSync(path.join(cwd, "agent-skills", "src", "remogram", "remogram-consumer"), { recursive: true });
   fs.mkdirSync(homeDir, { recursive: true });
+  fs.mkdirSync(path.join(homeDir, ".codex"), { recursive: true });
   fs.writeFileSync(path.join(cwd, "agent-skills", "src", "remogram", "remogram-consumer", "SKILL.md"), [
     "---",
     "name: remogram-consumer",
@@ -129,6 +131,7 @@ test("doctor --tool ignores unrelated global installed drift", () => {
   const homeDir = path.join(root, "home");
   fs.mkdirSync(path.join(cwd, "agent-skills", "src", "runlane", "runlane-consumer"), { recursive: true });
   fs.mkdirSync(homeDir, { recursive: true });
+  fs.mkdirSync(path.join(homeDir, ".codex"), { recursive: true });
   fs.writeFileSync(path.join(cwd, "agent-skills", "src", "runlane", "runlane-consumer", "SKILL.md"), [
     "---",
     "name: runlane-consumer",
@@ -296,6 +299,7 @@ test("Runlane and Remogram examples dry-run sync and doctor", () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), `skillpress-example-${example.directory}-`));
     const homeDir = path.join(root, "home");
     fs.mkdirSync(homeDir, { recursive: true });
+    fs.mkdirSync(path.join(homeDir, ".codex"), { recursive: true });
     const env = { ...process.env, HOME: homeDir };
     const cwd = path.join(repoRoot, "examples", example.directory);
 

@@ -25,6 +25,14 @@ function writeSkill(filePath, content) {
   fs.writeFileSync(filePath, content);
 }
 
+function detectProviders(fx, providers = ["codex"]) {
+  for (const provider of providers) {
+    if (provider === "codex") {
+      fs.mkdirSync(path.join(fx.homeDir, ".codex"), { recursive: true });
+    }
+  }
+}
+
 function writeToolSkill(fx, tool, skill, content = null) {
   writeSkill(path.join(fx.cwd, "agent-skills", "src", tool, skill, "SKILL.md"), content ?? [
     "---",
@@ -166,6 +174,7 @@ test("status lints canonical sources before install", () => {
 
 test("tool-scoped status ignores unrelated installed global drift", () => {
   const fx = fixture();
+  detectProviders(fx);
   writeToolSkill(fx, "runlane", "runlane-consumer");
   assert.equal(syncPacket({ cwd: fx.cwd, homeDir: fx.homeDir, provider: "codex", tool: "runlane" }).ok, true);
 
@@ -185,6 +194,7 @@ test("tool-scoped status ignores unrelated installed global drift", () => {
 
 test("tool-scoped status ignores unrelated missing manifest entries", () => {
   const fx = fixture();
+  detectProviders(fx);
   writeToolSkill(fx, "runlane", "runlane-consumer");
   const sync = syncPacket({ cwd: fx.cwd, homeDir: fx.homeDir, provider: "codex", tool: "runlane" });
   assert.equal(sync.ok, true);
@@ -211,6 +221,7 @@ test("tool-scoped status ignores unrelated missing manifest entries", () => {
 
 test("tool-scoped status still fails on missing requested tool installs", () => {
   const fx = fixture();
+  detectProviders(fx);
   writeToolSkill(fx, "runlane", "runlane-consumer");
   assert.equal(syncPacket({ cwd: fx.cwd, homeDir: fx.homeDir, provider: "codex", tool: "runlane" }).ok, true);
   fs.unlinkSync(path.join(fx.homeDir, ".codex", "skills", "runlane-consumer", "SKILL.md"));
@@ -222,6 +233,7 @@ test("tool-scoped status still fails on missing requested tool installs", () => 
 
 test("tool-scoped status still fails on requested tool duplicate conflicts", () => {
   const fx = fixture();
+  detectProviders(fx);
   writeToolSkill(fx, "runlane", "runlane-consumer");
   assert.equal(syncPacket({ cwd: fx.cwd, homeDir: fx.homeDir, provider: "codex", tool: "runlane" }).ok, true);
   writeSkill(path.join(fx.homeDir, ".agents", "skills", "runlane-consumer", "SKILL.md"), "# Runlane drift\n");
@@ -233,6 +245,7 @@ test("tool-scoped status still fails on requested tool duplicate conflicts", () 
 
 test("status detects installed auxiliary-file drift", async () => {
   const fx = fixture();
+  detectProviders(fx);
   writeSkill(path.join(fx.cwd, "agent-skills", "src", "runlane", "runlane-consumer", "SKILL.md"), [
     "---",
     "name: runlane-consumer",

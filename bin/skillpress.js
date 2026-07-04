@@ -27,11 +27,12 @@ function readOptions(args, name) {
 }
 
 function usage() {
+  const providerHelp = "codex|agents|cursor|claude-code|zed|github-copilot|cline|roo|continue|devin|github-copilot-instructions|agents-md";
   return [
     "skillpress boundary --json",
-    "skillpress status --json [--config <path>] [--manifest <path>] [--provider codex|agents|cursor|claude-code] [--tool <tool>] [--source-root <path>] [--source-layout auto|tool-scoped|agent-skills|claude-skills] [--contract-root <path>] [--policy generic|dogfood|none]",
-    "skillpress doctor --json [--config <path>] [--manifest <path>] [--provider codex|agents|cursor|claude-code] [--tool <tool>] [--source-root <path>] [--source-layout auto|tool-scoped|agent-skills|claude-skills] [--contract-root <path>] [--policy generic|dogfood|none]",
-    "skillpress sync --json [--config <path>] [--provider codex|agents|cursor|claude-code] [--tool <tool>] [--manifest <path>] [--source-root <path>] [--source-layout auto|tool-scoped|agent-skills|claude-skills] [--contract-root <path>] [--policy generic|dogfood|none] [--dry-run]"
+    `skillpress status --json [--config <path>] [--manifest <path>] [--provider ${providerHelp}] [--tool <tool>] [--source-root <path>] [--source-layout auto|tool-scoped|agent-skills|claude-skills] [--contract-root <path>] [--policy generic|dogfood|none]`,
+    `skillpress doctor --json [--config <path>] [--manifest <path>] [--provider ${providerHelp}] [--tool <tool>] [--source-root <path>] [--source-layout auto|tool-scoped|agent-skills|claude-skills] [--contract-root <path>] [--policy generic|dogfood|none]`,
+    `skillpress sync --json [--config <path>] [--provider ${providerHelp}] [--tool <tool>] [--manifest <path>] [--source-root <path>] [--source-layout auto|tool-scoped|agent-skills|claude-skills] [--contract-root <path>] [--policy generic|dogfood|none] [--dry-run]`
   ].join("\n");
 }
 
