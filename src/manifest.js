@@ -224,10 +224,21 @@ function normalizeProviderPath(value, providerTarget, { cwd, homeDir, field }) {
 
 function normalizeInstalledPath(value, providerTarget, { cwd, homeDir }) {
   const resolved = normalizeProviderPath(value, providerTarget, { cwd, homeDir, field: "installed_path" });
-  if (providerTarget.kind === "cursor-rule") {
-    if (path.extname(resolved) !== ".mdc") {
-      throw manifestError("manifest_invalid_installed_path", "cursor installed_path must point to an .mdc rule", {
+  if (providerTarget.kind === "rule-directory") {
+    const extension = providerTarget.extension ?? ".md";
+    if (!resolved.endsWith(extension)) {
+      throw manifestError("manifest_invalid_installed_path", `rule installed_path must point to a ${extension} file`, {
         installed_path: resolved
+      });
+    }
+    return resolved;
+  }
+  if (providerTarget.kind === "single-instructions-file") {
+    const expected = path.join(providerTarget.root, providerTarget.entrypoint ?? "AGENTS.skillpress.md");
+    if (resolved !== expected) {
+      throw manifestError("manifest_invalid_installed_path", "single-file provider installed_path must point to the configured generated instructions file", {
+        installed_path: resolved,
+        expected
       });
     }
     return resolved;
@@ -242,8 +253,10 @@ function normalizeInstalledPath(value, providerTarget, { cwd, homeDir }) {
 
 function normalizeInstalledRoot(value, providerTarget, { cwd, homeDir }) {
   if (value === undefined || value === null) {
-    return path.dirname(normalizeInstalledPath(providerTarget.kind === "cursor-rule"
-      ? path.join(providerTarget.root, "__placeholder__.mdc")
+    return path.dirname(normalizeInstalledPath(providerTarget.kind === "rule-directory"
+      ? path.join(providerTarget.root, `__placeholder__${providerTarget.extension ?? ".md"}`)
+      : providerTarget.kind === "single-instructions-file"
+        ? path.join(providerTarget.root, providerTarget.entrypoint ?? "AGENTS.skillpress.md")
       : path.join(providerTarget.root, "__placeholder__", "SKILL.md"), providerTarget, { cwd, homeDir }));
   }
   return normalizeProviderPath(value, providerTarget, { cwd, homeDir, field: "installed_root" });
@@ -259,6 +272,13 @@ function validateFiles(value) {
   return value.map((entry) => validateSafeRelativePath(entry, "files[]"));
 }
 
+function contextProviderTarget(provider, context, { cwd, homeDir }) {
+  const configuredTargets = context.providerTargets instanceof Map
+    ? context.providerTargets
+    : new Map((context.providerTargets ?? []).map((entry) => [entry.id, entry]));
+  return configuredTargets.get(provider) ?? providerById(provider, { cwd, homeDir });
+}
+
 export function validateManifestEntry(entry, context = {}) {
   const cwd = path.resolve(context.cwd ?? process.cwd());
   const homeDir = path.resolve(context.homeDir ?? process.env.HOME ?? ".");
@@ -267,7 +287,7 @@ export function validateManifestEntry(entry, context = {}) {
   }
   const skill = assertSafeSkillId(requireString(entry.skill, "skill", { max: 120 }));
   const provider = requireString(entry.provider, "provider", { max: 80 });
-  const providerTarget = providerById(provider, { cwd, homeDir });
+  const providerTarget = contextProviderTarget(provider, context, { cwd, homeDir });
   const sourcePath = validateOptionalSafeRelativePath(entry.source_path, "source_path");
   const sourceRootPath = validateOptionalSafeRelativePath(entry.source_root_path, "source_root_path");
   const sourceRepo = validateOptionalString(entry.source_repo, "source_repo", { max: 256 });
@@ -318,7 +338,12 @@ export function validateManifestEntry(entry, context = {}) {
     installed_root: installedRoot,
     files,
     version,
-    target: validateOptionalString(entry.target, "target", { max: 80 }) ?? provider
+    target: validateOptionalString(entry.target, "target", { max: 80 }) ?? provider,
+    surface_id: validateOptionalString(entry.surface_id, "surface_id", { max: 120 }) ?? null,
+    surface_kind: validateOptionalString(entry.surface_kind, "surface_kind", { max: 80 }) ?? null,
+    fidelity: validateOptionalString(entry.fidelity, "fidelity", { max: 80 }) ?? null,
+    provider_detected: entry.provider_detected === undefined || entry.provider_detected === null ? null : entry.provider_detected === true,
+    auxiliary_files_omitted: entry.auxiliary_files_omitted === undefined || entry.auxiliary_files_omitted === null ? false : entry.auxiliary_files_omitted === true
   };
 }
 
@@ -342,10 +367,12 @@ export function validateManifest(document, context = {}) {
   const entries = document.entries.map((entry) => validateManifestEntry(entry, context));
   const byInstalledPath = new Set();
   for (const entry of entries) {
-    const key = entry.installed_path;
+    const key = entry.surface_id
+      ? `${entry.surface_id}\0${entry.installed_path}\0${entry.skill}`
+      : entry.installed_path;
     if (byInstalledPath.has(key)) {
       throw manifestError("manifest_duplicate_installed_path", "installed_path must be unique", {
-        installed_path: key
+        installed_path: entry.installed_path
       });
     }
     byInstalledPath.add(key);

@@ -6,9 +6,12 @@ agent surfaces, keep them current, and report drift.
 
 ## Owns
 
-- Install and sync skills to Cursor, Codex, Claude Code, and agent-local roots.
-- Provider-specific install layout such as `.cursor/rules`, `.codex/skills`,
-  `.claude/skills`, and `.agents/skills`.
+- Install and sync skills to Agent Skills directories, agent instruction files,
+  and lower-fidelity IDE rule surfaces.
+- Provider-specific install layout such as `.codex/skills`, `.agents/skills`,
+  `.claude/skills`, `.copilot/skills`, `.cline/skills`, `.roo/skills`,
+  `.cursor/rules`, `.continue/rules`, `.devin/rules`,
+  `.github/instructions`, and `AGENTS.skillpress.md`.
 - Installed skill manifests: what is installed, from where, at what
   version or sha, and for which target.
 - `sync`, `status`, and `doctor` checks for skill freshness.
@@ -38,8 +41,8 @@ agent surfaces, keep them current, and report drift.
 The package-manager slice establishes:
 
 - `skillpress boundary --json` for stable ownership data.
-- Provider target modeling for Codex, agent-local roots, Claude Code, and
-  Cursor project rules.
+- Provider target modeling for full-fidelity skill directories, rule-directory
+  adapters, and single instruction-file adapters.
 - Manifest validation for installed skills, including legacy v1 reads and v2
   writes.
 - Canonical repo-owned Agent Skills directories under generic
@@ -53,10 +56,14 @@ The package-manager slice establishes:
 - `skillpress.config.json` for source roots, contract root, provider defaults,
   and policy packs.
 
-Directory providers receive the full skill directory. Cursor receives a rendered
-`.cursor/rules/skillpress/{skill}.mdc` project rule. When a Cursor target has
-auxiliary Agent Skills files, Skillpress reports that the files cannot be
-consumed directly by Cursor's rule surface.
+Directory providers receive the full skill directory. Rule-directory providers
+receive one rendered rule file per skill, such as
+`.cursor/rules/skillpress/{skill}.mdc`, `.continue/rules/{skill}.md`, or
+`.github/instructions/skillpress/{skill}.instructions.md`. Single-file
+providers receive a combined instruction file such as `AGENTS.skillpress.md`.
+When a provider cannot consume auxiliary Agent Skills files, Skillpress reports
+`provider_auxiliary_files_omitted` instead of pretending the install has full
+Agent Skills semantics.
 
 Each sync render writes a generated header on the installed entrypoint with:
 
@@ -68,6 +75,10 @@ Each sync render writes a generated header on the installed entrypoint with:
 - `target`;
 - `tool`;
 - `skill`.
+
+Manifest entries also record provider surface metadata such as `surface_id`,
+`surface_kind`, `fidelity`, provider detection, and whether auxiliary files
+were omitted.
 
 The verifier reports:
 

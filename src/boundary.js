@@ -5,16 +5,24 @@ export const SKILLPRESS_BOUNDARY = Object.freeze({
   summary: "Agent skill sync and availability across providers.",
   owns: [
     "Install and sync skills to provider surfaces",
-    "Provider-specific install layout",
+    "Provider-specific install layout and render fidelity",
     "Installed skill manifest with source path, source tree hash, version, sha, and target",
     "Skill freshness status and drift doctor",
     "Source metadata that ties installed skills back to tool versions"
   ],
   provider_targets: [
     "codex",
+    "agents",
     "cursor",
     "claude-code",
-    "agents"
+    "zed",
+    "github-copilot",
+    "cline",
+    "roo",
+    "continue",
+    "devin",
+    "github-copilot-instructions",
+    "agents-md"
   ],
   does_not_own: [
     "Skill authoring",
@@ -36,7 +44,7 @@ export const SKILLPRESS_BOUNDARY = Object.freeze({
     "skillpress boundary --json",
     "skillpress status --json",
     "skillpress doctor --json",
-    "skillpress sync --json [--provider codex|agents|cursor|claude-code] [--tool <tool>]"
+    "skillpress sync --json [--provider codex|agents|cursor|claude-code|zed|github-copilot|cline|roo|continue|devin|github-copilot-instructions|agents-md] [--tool <tool>]"
   ]
 });
 
