@@ -73,6 +73,7 @@ skillpress sync --json --provider cursor --tool runlane
 skillpress sync --json --provider claude-code --tool runlane
 skillpress sync --json --tool remogram --dry-run
 skillpress doctor --json --policy generic
+skillpress doctor --json --diagram-telemetry
 ```
 
 Supported source layouts are `auto`, `tool-scoped`, `agent-skills`, and
@@ -95,6 +96,21 @@ skillpress repair-plan --json
 `repair-plan` is read-only. It reports resync, source-config, manifest, and
 manual-review actions without deleting or rewriting provider caches. See
 [docs/installed-hygiene.md](docs/installed-hygiene.md).
+
+## Diagram Telemetry
+
+Skillpress can emit bounded Diagram telemetry for selected sync, status, and
+doctor diagnostics:
+
+```bash
+skillpress doctor --json --diagram-telemetry
+skillpress status --json --diagram-telemetry
+skillpress sync --json --tool runlane --provider codex --diagram-telemetry
+```
+
+Telemetry is opt-in and advisory. Diagram cannot approve installs, suppress
+Skillpress findings, make doctor pass, satisfy release gates, route lanes, or
+open issues. See [docs/diagram-emission.md](docs/diagram-emission.md).
 
 ## Source Layouts
 
