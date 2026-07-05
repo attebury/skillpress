@@ -19,6 +19,7 @@ test("top-level help prints usage and exits cleanly", () => {
   assert.match(result.stdout, /skillpress boundary --json/);
   assert.match(result.stdout, /skillpress repair-plan --json/);
   assert.match(result.stdout, /--source-layout auto\|tool-scoped\|agent-skills\|claude-skills/);
+  assert.match(result.stdout, /--diagram-telemetry/);
   assert.equal(result.stderr, "");
 });
 
@@ -171,6 +172,57 @@ test("doctor --tool ignores unrelated global installed drift", () => {
   });
   assert.equal(globalDoctor.status, 1, globalDoctor.stderr || globalDoctor.stdout);
   assert.ok(JSON.parse(globalDoctor.stdout).findings.some((entry) => entry.code === "duplicate_skill_content_conflict"));
+});
+
+test("doctor diagram telemetry is opt-in and does not change doctor failure", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "skillpress-cli-diagram-"));
+  const cwd = path.join(root, "repo");
+  const homeDir = path.join(root, "home");
+  const fakeBin = path.join(root, "bin");
+  const capture = path.join(root, "diagram-capture.jsonl");
+  fs.mkdirSync(path.join(homeDir, ".codex", "skills", "alpha"), { recursive: true });
+  fs.mkdirSync(path.join(homeDir, ".agents", "skills", "alpha"), { recursive: true });
+  fs.mkdirSync(fakeBin, { recursive: true });
+  fs.mkdirSync(cwd, { recursive: true });
+  fs.writeFileSync(path.join(homeDir, ".codex", "skills", "alpha", "SKILL.md"), "# Alpha\n");
+  fs.writeFileSync(path.join(homeDir, ".agents", "skills", "alpha", "SKILL.md"), "# Alpha drift\n");
+  const fakeDiagram = path.join(fakeBin, "diagram");
+  fs.writeFileSync(fakeDiagram, [
+    "#!/usr/bin/env node",
+    "const fs = require('node:fs');",
+    "fs.appendFileSync(process.env.DIAGRAM_CAPTURE, JSON.stringify(process.argv.slice(2)) + '\\n');",
+    "process.stdout.write(JSON.stringify({ ok: true, type: 'diagram.event_emit.v1' }) + '\\n');"
+  ].join("\n"));
+  fs.chmodSync(fakeDiagram, 0o755);
+  const env = {
+    ...process.env,
+    HOME: homeDir,
+    PATH: `${fakeBin}${path.delimiter}${process.env.PATH}`,
+    DIAGRAM_CAPTURE: capture
+  };
+
+  const defaultDoctor = spawnSync(process.execPath, [cli, "doctor", "--json"], {
+    cwd,
+    env,
+    encoding: "utf8"
+  });
+  assert.equal(defaultDoctor.status, 1, defaultDoctor.stderr || defaultDoctor.stdout);
+  assert.equal(Object.hasOwn(JSON.parse(defaultDoctor.stdout), "diagram_telemetry"), false);
+  assert.equal(fs.existsSync(capture), false);
+
+  const telemetryDoctor = spawnSync(process.execPath, [cli, "doctor", "--json", "--diagram-telemetry"], {
+    cwd,
+    env,
+    encoding: "utf8"
+  });
+  assert.equal(telemetryDoctor.status, 1, telemetryDoctor.stderr || telemetryDoctor.stdout);
+  const packet = JSON.parse(telemetryDoctor.stdout);
+  assert.equal(packet.ok, false);
+  assert.equal(packet.diagram_telemetry.requested, true);
+  assert.ok(packet.diagram_telemetry.emitted_count >= 1);
+  const [argv] = fs.readFileSync(capture, "utf8").trim().split("\n").map((line) => JSON.parse(line));
+  assert.deepEqual(argv.slice(0, 2), ["event", "emit"]);
+  assert.ok(argv.includes("command=skillpress doctor --json"));
 });
 
 test("CLI accepts source layout, policy, config, and cursor provider options", () => {
@@ -344,4 +396,41 @@ test("Runlane and Remogram examples dry-run sync and doctor", () => {
     assert.equal(doctor.status, 0, doctor.stderr || doctor.stdout);
     assert.equal(JSON.parse(doctor.stdout).ok, true);
   }
+});
+
+test("Skillpress consumer skill dry-run sync and doctor", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "skillpress-cli-own-skill-"));
+  const homeDir = path.join(root, "home");
+  fs.mkdirSync(path.join(homeDir, ".codex"), { recursive: true });
+  const env = { ...process.env, HOME: homeDir };
+
+  const sync = spawnSync(process.execPath, [
+    cli,
+    "sync",
+    "--json",
+    "--provider",
+    "codex",
+    "--tool",
+    "skillpress",
+    "--dry-run"
+  ], {
+    cwd: repoRoot,
+    env,
+    encoding: "utf8"
+  });
+
+  assert.equal(sync.status, 0, sync.stderr || sync.stdout);
+  const syncPacket = JSON.parse(sync.stdout);
+  assert.equal(syncPacket.ok, true);
+  assert.equal(syncPacket.summary.source_count, 1);
+  assert.equal(syncPacket.summary.write_count, 1);
+
+  const doctor = spawnSync(process.execPath, [cli, "doctor", "--json", "--tool", "skillpress"], {
+    cwd: repoRoot,
+    env,
+    encoding: "utf8"
+  });
+
+  assert.equal(doctor.status, 0, doctor.stderr || doctor.stdout);
+  assert.equal(JSON.parse(doctor.stdout).ok, true);
 });

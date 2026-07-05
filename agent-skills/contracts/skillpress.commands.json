@@ -1,0 +1,12 @@
+{
+  "schema": "skillpress.command-contract",
+  "version": 1,
+  "tool": "skillpress",
+  "commands": [
+    "boundary",
+    "doctor",
+    "repair-plan",
+    "status",
+    "sync"
+  ]
+}
