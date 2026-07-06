@@ -5,6 +5,7 @@ import { doctorPacket } from "../src/doctor.js";
 import { repairPlanPacket } from "../src/repair-plan.js";
 import { statusPacket } from "../src/status.js";
 import { syncPacket } from "../src/sync.js";
+import { versionPacket, versionText } from "../src/version-info.js";
 
 function printJson(packet) {
   process.stdout.write(`${JSON.stringify(packet, null, 2)}\n`);
@@ -31,6 +32,8 @@ function readOptions(args, name) {
 function usage() {
   const providerHelp = "codex|agents|cursor|claude-code|zed|github-copilot|cline|roo|continue|devin|github-copilot-instructions|agents-md";
   return [
+    "skillpress --version",
+    "skillpress version --json",
     "skillpress boundary --json",
     `skillpress repair-plan --json [--config <path>] [--manifest <path>] [--provider ${providerHelp}] [--tool <tool>] [--source-root <path>] [--source-layout auto|tool-scoped|agent-skills|claude-skills] [--contract-root <path>] [--policy generic|dogfood|none]`,
     `skillpress status --json [--config <path>] [--manifest <path>] [--provider ${providerHelp}] [--tool <tool>] [--source-root <path>] [--source-layout auto|tool-scoped|agent-skills|claude-skills] [--contract-root <path>] [--policy generic|dogfood|none] [--diagram-telemetry]`,
@@ -57,8 +60,40 @@ function withDiagramTelemetry(commandName, packet) {
   };
 }
 
-if (command === "--help" || command === "-h" || command === "help") {
+function unsupportedVersionOption(args) {
+  return args.find((arg) => arg !== "--json") ?? null;
+}
+
+if (command === "--version") {
+  if (args.length > 0) {
+    process.stderr.write("--version does not accept additional options\n");
+    process.exitCode = 2;
+  } else {
+    const result = versionText();
+    if (!result.ok) {
+      process.stderr.write(`${result.message}\n`);
+      process.exitCode = 1;
+    } else {
+      process.stdout.write(`${result.text}\n`);
+    }
+  }
+} else if (command === "--help" || command === "-h" || command === "help") {
   process.stdout.write(`${usage()}\n`);
+} else if (command === "version") {
+  const unsupported = unsupportedVersionOption(args);
+  if (!wantsJson) {
+    process.stderr.write("version currently requires --json\n");
+    process.exitCode = 2;
+  } else if (unsupported) {
+    process.stderr.write(`version received unsupported option: ${unsupported}\n`);
+    process.exitCode = 2;
+  } else {
+    const packet = versionPacket();
+    printJson(packet);
+    if (!packet.ok) {
+      process.exitCode = 1;
+    }
+  }
 } else if (command === "boundary") {
   if (!wantsJson) {
     process.stderr.write("boundary currently requires --json\n");
