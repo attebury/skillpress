@@ -1,6 +1,6 @@
 # Skillpress
 
-> Skillpress is a package manager for portable Agent Skills directories. It syncs canonical skill sources to Codex, Claude Code, Cursor project rules, and agent-local skill roots, then reports drift.
+> Skillpress is a package manager for portable Agent Skills directories. It syncs canonical skill sources to Codex, Claude Code, Cursor project rules, Antigravity global customizations, and agent-local skill roots, then reports drift.
 
 Skillpress is not a skill authoring system, a CLI promoter, a workflow orchestrator, or a proof/evidence system. Product repositories own their skills; Skillpress renders, installs, manifests, and verifies provider caches.
 
@@ -12,10 +12,10 @@ Skillpress is not a skill authoring system, a CLI promoter, a workflow orchestra
 
 ## Source
 
-- [CLI entrypoint](https://raw.githubusercontent.com/attebury/skillpress/main/bin/skillpress.js): Command routing for boundary, status, doctor, and sync.
+- [CLI entrypoint](https://raw.githubusercontent.com/attebury/skillpress/main/bin/skillpress.js): Command routing for boundary, status, doctor, sync, and publish.
 - [Version info](https://raw.githubusercontent.com/attebury/skillpress/main/src/version-info.js): Repo-independent CLI version packet and human-readable version text.
 - [Source discovery](https://raw.githubusercontent.com/attebury/skillpress/main/src/source.js): Agent Skills directory discovery, hashing, and source-tree safety checks.
-- [Provider targets](https://raw.githubusercontent.com/attebury/skillpress/main/src/providers.js): Provider-specific install roots for Codex, agent-local roots, Claude Code, and Cursor.
+- [Provider targets](https://raw.githubusercontent.com/attebury/skillpress/main/src/providers.js): Provider-specific install roots for Codex, agent-local roots, Claude Code, Cursor, and Antigravity.
 - [Sync](https://raw.githubusercontent.com/attebury/skillpress/main/src/sync.js): Rendering canonical skills into provider targets and writing install manifests.
 - [Status](https://raw.githubusercontent.com/attebury/skillpress/main/src/status.js): Installed-vs-expected reporting and drift detection.
 - [Doctor](https://raw.githubusercontent.com/attebury/skillpress/main/src/doctor.js): Aggregated status and policy findings.

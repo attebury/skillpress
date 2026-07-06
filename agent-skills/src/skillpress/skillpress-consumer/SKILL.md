@@ -6,8 +6,7 @@ skillpress_publish_scope: forest
 
 # Skillpress Consumer
 
-Skillpress installs canonical Agent Skills directories into provider targets such
-as Codex, Claude Code, Cursor project rules, and agent-local skill roots.
+Skillpress installs canonical Agent Skills directories into provider targets such as Codex, Claude Code, Cursor project rules, Antigravity global customizations, and agent-local skill roots.
 Skillpress owns skill discovery, rendering, install manifests, status, doctor,
 sync, and repair-plan output. It does not author product skills, promote CLI
 binaries, run lane orchestration, or decide workflow evidence.
