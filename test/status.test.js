@@ -164,11 +164,10 @@ test("status lints canonical sources before install", () => {
     cwd: fx.cwd,
     homeDir: fx.homeDir,
     tool: "remogram",
-    policyPacks: ["generic", "dogfood"]
+    policyPacks: ["linter"]
   });
 
   assert.equal(packet.ok, false);
-  assert.ok(packet.issues.some((entry) => entry.code === "policy_stale_remogram_cr_command"));
   assert.ok(packet.issues.some((entry) => entry.code === "command_contract_unknown"));
 });
 

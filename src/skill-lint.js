@@ -2,7 +2,7 @@ import { GENERATED_HEADER_END, GENERATED_HEADER_START } from "./render.js";
 
 const HEADER_START = GENERATED_HEADER_START;
 const HEADER_END = GENERATED_HEADER_END;
-const POLICY_PACKS = new Set(["generic", "linter", "dogfood", "security", "ci", "performance"]);
+const POLICY_PACKS = new Set(["generic", "linter", "security", "ci", "performance"]);
 
 function uniquePolicies(policies = ["linter"], customPolicyRules = []) {
   if (policies.includes("none")) {
@@ -330,60 +330,6 @@ export function lintReferencedFiles(content, source = null) {
   return findings;
 }
 
-function hasAllowedReason(content) {
-  return /(?:why allowed|allowed reason|external user|explicitly requested)\s*:/i.test(content);
-}
-
-export function lintPolicyRules(content, context = {}) {
-  const text = String(content);
-  const lower = text.toLowerCase();
-  const findings = [];
-  const skill = context.skill ?? null;
-  const tool = context.tool ?? null;
-  const location = context.path ?? null;
-  const dogfoodish = /dogfood/.test(lower) || /dogfood/i.test(String(skill)) || /dogfood/i.test(String(location));
-
-  if (
-    dogfoodish &&
-    /\b(?:allow_missing_checks|allow_pending_checks|REMOGRAM_ALLOW_MISSING_CHECKS|REMOGRAM_ALLOW_PENDING_CHECKS)\b/i.test(text)
-  ) {
-    findings.push(finding("policy_missing_pending_check_waiver_forbidden", "Dogfood skills must not allow missing or pending checks", {
-      skill,
-      tool
-    }));
-  }
-
-  if (/\bnpm\s+link\b/i.test(text) && /\b(?:lane|dogfood|worktree|local)\b/i.test(text)) {
-    findings.push(finding("policy_lane_npm_link_forbidden", "Lane and dogfood instructions must not use npm link", {
-      skill,
-      tool
-    }));
-  }
-
-  if (/\borigin\/main\b/.test(text) && !/\bcanonical_integration_ref\b/.test(text)) {
-    findings.push(finding("policy_hardcoded_origin_main", "Generic workflow skills must use configured canonical_integration_ref instead of hardcoded origin/main", {
-      skill,
-      tool
-    }));
-  }
-
-  if (/\bremogram\s+cr\s+(?:view|checks|merge-plan)\b/.test(text)) {
-    findings.push(finding("policy_stale_remogram_cr_command", "Skill text uses stale remogram cr command names", {
-      skill,
-      tool
-    }));
-  }
-
-  if (/\b(?:compatibility|fallback|shim|bypass)\b/i.test(text) && !hasAllowedReason(text)) {
-    findings.push(finding("policy_unjustified_compatibility_language", "Compatibility, fallback, shim, or bypass language requires an explicit allowed reason", {
-      skill,
-      tool
-    }));
-  }
-
-  return findings;
-}
-
 export function lintSecurityRules(content, context = {}) {
   const text = String(content);
   const findings = [];
@@ -530,12 +476,7 @@ export function lintSkillContent(content, context = {}) {
       ...lintCommandContracts(content, context.contracts ?? {}, context)
     );
   }
-  if (policies.includes("dogfood")) {
-    findings.push(...lintPolicyRules(content, context));
-  }
-  if (!policies.includes("linter") && policies.includes("dogfood")) {
-    findings.push(...lintCommandContracts(content, context.contracts ?? {}, context));
-  }
+
 
   if (policies.includes("security")) {
     findings.push(...lintSecurityRules(content, context));

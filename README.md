@@ -169,23 +169,16 @@ Skillpress provides core built-in policy packs to validate different aspects of 
    - Validates commands against `*.commands.json` contracts.
    *(Note: `"generic"` remains supported as a backward-compatible alias of `"linter"`).*
 
-2. **`dogfood`**: Adds safety checks for repos exercising local toolchains and lane workflows:
-   - Rejects missing-check waivers (e.g. `allow_missing_checks`).
-   - Rejects lane `npm link` instructions.
-   - Rejects hardcoded `origin/main` (requiring `canonical_integration_ref` configuration).
-   - Rejects stale `remogram cr ...` commands.
-   - Rejects unjustified fallback or shim language.
-
-3. **`security`**: Ensures instruction blocks adhere to secure execution practices:
+2. **`security`**: Ensures instruction blocks adhere to secure execution practices:
    - Rejects direct piping of curl outputs to the shell (`curl ... | sh`).
    - Rejects execution of privilege elevation commands (`sudo`).
    - Rejects hardcoded credentials, secret keys, or token assignments.
 
-4. **`ci`**: Protects automation runner runs:
+3. **`ci`**: Protects automation runner runs:
    - Rejects interactive prompts (such as `read -p` or `rm -i`) that block non-interactive runner processes.
    - Rejects arbitrary direct `node <script>.js` executions (requiring teams to declare standard npm run scripts).
 
-5. **`performance`**: Optimizes the size and portability of skills:
+4. **`performance`**: Optimizes the size and portability of skills:
    - Rejects hardcoded absolute home paths (like `/Users/username` or `/home/username`).
    - Rejects oversized code blocks containing more than 40 lines (prevents LLM context bloating).
 
@@ -197,7 +190,7 @@ To configure active packs inside `skillpress.config.json`:
     { "path": "agent-skills/src", "layout": "tool-scoped" }
   ],
   "contract_root": "agent-skills/contracts",
-  "policy_packs": ["linter", "dogfood", "security", "ci"]
+  "policy_packs": ["linter", "security", "ci"]
 }
 ```
 
@@ -242,10 +235,10 @@ Teams can dynamically define their own custom policy rules and group them into c
 
 Runlane and Remogram example projects live under `examples/runlane` and
 `examples/remogram`. They demonstrate tool-scoped sources, command contracts,
-and the optional dogfood policy pack. Examples are repo documentation and test
+and custom policy packs. Examples are repo documentation and test
 fixtures; they are excluded from the npm package.
 
-Dogfood forge identity is local runtime config. Keep machine-local forge and
+Forge identity is local runtime config. Keep machine-local forge and
 tool config ignored. Tracked examples may provide `.example` templates, but
 runtime credentials and private forge identity must stay outside the public
 package.
