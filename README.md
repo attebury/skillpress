@@ -38,7 +38,7 @@ Use a config like:
   "source_roots": [
     { "path": "skills", "layout": "agent-skills" }
   ],
-  "policy_packs": ["generic"],
+  "policy_packs": ["linter"],
   "providers": ["codex", "agents", "cursor"]
 }
 ```
@@ -53,7 +53,7 @@ skillpress sync --json --source-root skills --source-layout agent-skills
 ```
 
 With no config, Skillpress looks for `agent-skills/src` using the
-`tool-scoped` layout and enables only the `generic` policy pack.
+`tool-scoped` layout and enables only the `linter` policy pack.
 
 ## Commands
 
@@ -80,7 +80,7 @@ skillpress doctor --json --provider codex --tool remogram
 skillpress sync --json --provider cursor --tool runlane
 skillpress sync --json --provider claude-code --tool runlane
 skillpress sync --json --tool remogram --dry-run
-skillpress doctor --json --policy generic
+skillpress doctor --json --policy linter
 skillpress doctor --json --config skillpress.config.json
 ```
 
@@ -158,10 +158,38 @@ Each installed entrypoint is rendered with a generated header recording
 `generated_at`, `target`, `tool`, and `skill`. Do not edit installed provider
 roots as canonical source.
 
-## Dogfood Policy Pack
+## Built-in Policy Packs
 
-The optional `dogfood` policy pack is not a source layout. It adds safety
-checks for repos exercising local toolchains and lane workflows:
+Skillpress provides core built-in policy packs to validate different aspects of agent skills:
+
+1. **`linter`** (default; formerly named `generic`): Performs core syntax and shape checks:
+   - Balances Markdown code fences.
+   - Enforces frontmatter metadata structure (requires `name` and `description`).
+   - Verifies safety of relative file reference paths.
+   - Validates commands against `*.commands.json` contracts.
+   *(Note: `"generic"` remains supported as a backward-compatible alias of `"linter"`).*
+
+2. **`dogfood`**: Adds safety checks for repos exercising local toolchains and lane workflows:
+   - Rejects missing-check waivers (e.g. `allow_missing_checks`).
+   - Rejects lane `npm link` instructions.
+   - Rejects hardcoded `origin/main` (requiring `canonical_integration_ref` configuration).
+   - Rejects stale `remogram cr ...` commands.
+   - Rejects unjustified fallback or shim language.
+
+3. **`security`**: Ensures instruction blocks adhere to secure execution practices:
+   - Rejects direct piping of curl outputs to the shell (`curl ... | sh`).
+   - Rejects execution of privilege elevation commands (`sudo`).
+   - Rejects hardcoded credentials, secret keys, or token assignments.
+
+4. **`ci`**: Protects automation runner runs:
+   - Rejects interactive prompts (such as `read -p` or `rm -i`) that block non-interactive runner processes.
+   - Rejects arbitrary direct `node <script>.js` executions (requiring teams to declare standard npm run scripts).
+
+5. **`performance`**: Optimizes the size and portability of skills:
+   - Rejects hardcoded absolute home paths (like `/Users/username` or `/home/username`).
+   - Rejects oversized code blocks containing more than 40 lines (prevents LLM context bloating).
+
+To configure active packs inside `skillpress.config.json`:
 
 ```json
 {
@@ -169,14 +197,9 @@ checks for repos exercising local toolchains and lane workflows:
     { "path": "agent-skills/src", "layout": "tool-scoped" }
   ],
   "contract_root": "agent-skills/contracts",
-  "policy_packs": ["generic", "dogfood"]
+  "policy_packs": ["linter", "dogfood", "security", "ci"]
 }
 ```
-
-The pack rejects missing-check waivers, lane `npm link`, hardcoded
-`origin/main`, stale `remogram cr ...` commands, and unjustified fallback or
-shim language. External users can run the `generic` pack without inheriting
-dogfood rules.
 
 
 ## Custom Policy Packs & Rules
@@ -188,21 +211,21 @@ Teams can dynamically define their own custom policy rules and group them into c
   "source_roots": [
     { "path": "agent-skills/src", "layout": "tool-scoped" }
   ],
-  "policy_packs": ["generic", "security"],
+  "policy_packs": ["linter", "custom-security"],
   "custom_policy_rules": [
     {
       "id": "security-no-eval",
       "pattern": "\\beval\\s*\\(",
       "message": "Do not recommend raw 'eval()' calls in instructions",
       "severity": "error",
-      "pack": "security"
+      "pack": "custom-security"
     },
     {
       "id": "style-avoid-todos",
       "pattern": "todo:",
       "message": "Please remove temporary todo markers before publishing",
       "severity": "warning",
-      "pack": "generic"
+      "pack": "linter"
     }
   ]
 }
@@ -213,7 +236,7 @@ Teams can dynamically define their own custom policy rules and group them into c
 * `pattern`: A standard regular expression pattern matched against the skill's file content.
 * `message`: The custom error or warning description reported on failure.
 * `severity`: Either `"error"` (fails validation) or `"warning"` (reports drift but passes). Optional; defaults to `"error"`.
-* `pack`: The name of the policy pack the rule belongs to. Optional; defaults to `"generic"`. Any custom pack name defined here is dynamically registered and can be enabled in `"policy_packs"`.
+* `pack`: The name of the policy pack the rule belongs to. Optional; defaults to `"linter"`. Any custom pack name defined here is dynamically registered and can be enabled in `"policy_packs"`.
 
 ## Examples
 

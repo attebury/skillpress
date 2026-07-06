@@ -2,15 +2,18 @@ import { GENERATED_HEADER_END, GENERATED_HEADER_START } from "./render.js";
 
 const HEADER_START = GENERATED_HEADER_START;
 const HEADER_END = GENERATED_HEADER_END;
-const POLICY_PACKS = new Set(["generic", "dogfood"]);
+const POLICY_PACKS = new Set(["generic", "linter", "dogfood", "security", "ci", "performance"]);
 
-function uniquePolicies(policies = ["generic"], customPolicyRules = []) {
+function uniquePolicies(policies = ["linter"], customPolicyRules = []) {
   if (policies.includes("none")) {
     return [];
   }
   const customPacks = new Set(customPolicyRules.map((r) => r.pack).filter(Boolean));
   const selected = [];
-  for (const policy of policies) {
+  for (let policy of policies) {
+    if (policy === "generic") {
+      policy = "linter";
+    }
     if ((POLICY_PACKS.has(policy) || customPacks.has(policy)) && !selected.includes(policy)) {
       selected.push(policy);
     }
@@ -381,6 +384,108 @@ export function lintPolicyRules(content, context = {}) {
   return findings;
 }
 
+export function lintSecurityRules(content, context = {}) {
+  const text = String(content);
+  const findings = [];
+  const skill = context.skill ?? null;
+  const tool = context.tool ?? null;
+  const location = context.path ?? null;
+
+  if (/curl\s+.*\|\s*(?:bash|sh|zsh)/i.test(text)) {
+    findings.push(finding("security_shell_piping", "Direct piping of curl outputs to shell is forbidden for security safety", {
+      skill,
+      tool,
+      path: location
+    }));
+  }
+
+  if (/\bsudo\b/.test(text)) {
+    findings.push(finding("security_sudo_execution", "Unauthorized privilege escalation using sudo is forbidden", {
+      skill,
+      tool,
+      path: location
+    }));
+  }
+
+  if (/\b(?:api_key|token|password|secret|passwd)\s*[:=]\s*["'][A-Za-z0-9+/=_-]{16,}["']/i.test(text)) {
+    findings.push(finding("security_credential_exposure", "Hardcoded credential or token secret assignments are forbidden", {
+      skill,
+      tool,
+      path: location
+    }));
+  }
+
+  return findings;
+}
+
+export function lintCiRules(content, context = {}) {
+  const text = String(content);
+  const findings = [];
+  const skill = context.skill ?? null;
+  const tool = context.tool ?? null;
+  const location = context.path ?? null;
+
+  if (/\b(?:read\s+-p|rm\s+-i|cp\s+-i|mv\s+-i)\b/.test(text)) {
+    findings.push(finding("ci_interactive_prompts", "Interactive CLI prompts that block execution are forbidden", {
+      skill,
+      tool,
+      path: location
+    }));
+  }
+
+  if (/\bnode\s+[a-zA-Z0-9_-]+\.js\b/.test(text)) {
+    findings.push(finding("ci_arbitrary_node_execution", "Executing raw node scripts directly is forbidden; define and use npm scripts instead", {
+      skill,
+      tool,
+      path: location
+    }));
+  }
+
+  return findings;
+}
+
+export function lintPerformanceRules(content, context = {}) {
+  const text = String(content);
+  const findings = [];
+  const skill = context.skill ?? null;
+  const tool = context.tool ?? null;
+  const location = context.path ?? null;
+
+  if (/(?:\/Users\/[a-zA-Z0-9_-]+|\/home\/[a-zA-Z0-9_-]+)\b/i.test(text)) {
+    findings.push(finding("performance_absolute_paths", "Hardcoded absolute system home paths are forbidden; use portable workspace variables or relative paths", {
+      skill,
+      tool,
+      path: location
+    }));
+  }
+
+  const lines = text.split(/\r?\n/);
+  let insideBlock = false;
+  let blockLinesCount = 0;
+  for (const line of lines) {
+    if (/^(\s*)(`{3,}|~{3,})/.test(line)) {
+      if (insideBlock) {
+        if (blockLinesCount > 40) {
+          findings.push(finding("performance_oversized_code_block", "Markdown code block contains more than 40 lines which bloats prompt context", {
+            skill,
+            tool,
+            path: location
+          }));
+          break;
+        }
+        insideBlock = false;
+      } else {
+        insideBlock = true;
+        blockLinesCount = 0;
+      }
+    } else if (insideBlock) {
+      blockLinesCount += 1;
+    }
+  }
+
+  return findings;
+}
+
 function commandKey(match) {
   return [match[1], match[2]].filter(Boolean).join(" ");
 }
@@ -415,9 +520,9 @@ export function lintCommandContracts(content, contracts = {}, context = {}) {
 }
 
 export function lintSkillContent(content, context = {}) {
-  const policies = uniquePolicies(context.policyPacks ?? ["generic"], context.customPolicyRules);
+  const policies = uniquePolicies(context.policyPacks ?? ["linter"], context.customPolicyRules);
   const findings = [];
-  if (policies.includes("generic")) {
+  if (policies.includes("linter")) {
     findings.push(
       ...lintMarkdownFences(content),
       ...lintSkillShape(content, context),
@@ -428,13 +533,26 @@ export function lintSkillContent(content, context = {}) {
   if (policies.includes("dogfood")) {
     findings.push(...lintPolicyRules(content, context));
   }
-  if (!policies.includes("generic") && policies.includes("dogfood")) {
+  if (!policies.includes("linter") && policies.includes("dogfood")) {
     findings.push(...lintCommandContracts(content, context.contracts ?? {}, context));
+  }
+
+  if (policies.includes("security")) {
+    findings.push(...lintSecurityRules(content, context));
+  }
+  if (policies.includes("ci")) {
+    findings.push(...lintCiRules(content, context));
+  }
+  if (policies.includes("performance")) {
+    findings.push(...lintPerformanceRules(content, context));
   }
 
   if (Array.isArray(context.customPolicyRules)) {
     for (const rule of context.customPolicyRules) {
-      const pack = rule.pack ?? "generic";
+      let pack = rule.pack ?? "linter";
+      if (pack === "generic") {
+        pack = "linter";
+      }
       if (policies.includes(pack)) {
         try {
           const regex = new RegExp(rule.pattern);

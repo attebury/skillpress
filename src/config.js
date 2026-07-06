@@ -4,7 +4,7 @@ import { DEFAULT_CONTRACT_ROOT, DEFAULT_SOURCE_ROOT } from "./source.js";
 
 export const CONFIG_FILE = "skillpress.config.json";
 export const SOURCE_LAYOUTS = Object.freeze(["auto", "tool-scoped", "agent-skills", "claude-skills"]);
-export const POLICY_PACKS = Object.freeze(["generic", "dogfood"]);
+export const POLICY_PACKS = Object.freeze(["generic", "linter", "dogfood", "security", "ci", "performance"]);
 
 function configIssue(code, severity, message, details = {}) {
   return { code, severity, message, ...details };
@@ -39,7 +39,7 @@ function defaultConfig() {
   return {
     source_roots: [{ path: DEFAULT_SOURCE_ROOT, layout: "tool-scoped" }],
     contract_root: DEFAULT_CONTRACT_ROOT,
-    policy_packs: ["generic"],
+    policy_packs: ["linter"],
     custom_policy_rules: [],
     providers: null,
     manifest: {
