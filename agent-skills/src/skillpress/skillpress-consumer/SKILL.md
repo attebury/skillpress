@@ -1,6 +1,7 @@
 ---
 name: skillpress-consumer
 description: Use Skillpress to sync portable Agent Skills directories, inspect provider drift, plan install-cache repair, and record bounded Diagram telemetry for Skillpress diagnostics.
+skillpress_publish_scope: forest
 ---
 
 # Skillpress Consumer

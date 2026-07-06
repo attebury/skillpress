@@ -303,6 +303,27 @@ Provider config entries can be strings or objects:
 Custom roots are validated as local paths. Skillpress does not execute provider
 binaries for detection and does not install IDEs or CLIs.
 
+## Publishing Skills & Scoping
+
+Skillpress supports deploying portable Agent Skills directly to global customization directories (`~/.agents/skills`) or project-local multi-worktree environments (referred to as a forest/lane structure) using the `publish` command:
+
+```bash
+skillpress publish --json --skill <name> [--scope global|forest|tree] [--lanes <lane1,lane2>] [--dry-run]
+```
+
+### Scope Resolution Precedence
+The publication target scope and destination is evaluated in the following order of priority:
+1. **CLI Flags**: `--scope` and `--lanes` direct arguments.
+2. **Lanes Root Configuration**: Configured overrides under `publish_rules` inside `skillpress.config.json` at the forest root.
+3. **Skill Frontmatter**: Default values specified inside `SKILL.md` frontmatter (e.g. `skillpress_publish_scope: forest`).
+4. **System Default**: Defaults to `forest` scope.
+
+### Security Gates & Sandboxing
+To protect against malicious code injection when working in untrusted or cloned codebases, the publish pipeline enforces several safety boundaries:
+- **Global Elevation Refusal**: A skill cannot request to be published globally via its own frontmatter defaults alone. Global scopes must be explicitly authorized by a local forest configuration rule or passed as a command-line flag (`--scope global`).
+- **Traversal Safeguards**: Output paths must be located within valid workspace directories or the user's home customizations folder. Writing to system-sensitive paths (like `/etc`, `/var`, `~/.ssh`) is blocked and fails closed.
+- **Config Auditing**: Publishing a skill in a forest automatically generates a `skillpress.config.json` at the lanes root if missing, recording the authorized sync scope.
+
 ## Development
 
 ```bash
