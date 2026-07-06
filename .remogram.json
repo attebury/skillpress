@@ -1,0 +1,17 @@
+{
+  "version": "1",
+  "provider": "gitea-api",
+  "remote": "origin",
+  "owner": "attebury",
+  "repo": "skillpress",
+  "baseUrl": "http://localhost:3000",
+  "write_commands": [
+    "cr_open",
+    "status_set",
+    "merge",
+    "issue_open",
+    "issue_close",
+    "issue_comment",
+    "cr_edit"
+  ]
+}
