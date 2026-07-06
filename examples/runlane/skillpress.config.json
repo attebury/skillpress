@@ -6,6 +6,6 @@
     }
   ],
   "contract_root": "agent-skills/contracts",
-  "policy_packs": ["generic", "dogfood"],
+  "policy_packs": ["linter"],
   "providers": ["codex", "agents", "cursor", "claude-code"]
 }

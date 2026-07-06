@@ -32,7 +32,7 @@ function readOptions(args, name) {
 
 function usage() {
   const providerHelp = "codex|agents|cursor|claude-code|zed|github-copilot|cline|roo|continue|devin|github-copilot-instructions|agents-md|antigravity";
-  const policyHelp = "linter|dogfood|security|ci|performance|none";
+  const policyHelp = "linter|security|ci|performance|none";
   return [
     "skillpress --version",
     "skillpress version --json",

@@ -9,7 +9,6 @@ import {
   compareHeaderToManifest,
   lintCommandContracts,
   lintMarkdownFences,
-  lintPolicyRules,
   lintSkillContent,
   parseGeneratedHeader
 } from "./skill-lint.js";
@@ -533,16 +532,7 @@ function collectIssues({ inventory, manifestState, sourceState, contractState, p
       path: skill.path,
       tool: source?.tool ?? null
     };
-    if (policyPacks.includes("dogfood")) {
-      for (const finding of lintPolicyRules(stripGeneratedHeader(skill.content), lintContext)) {
-        issues.push(issue(finding.code, finding.severity, finding.message, {
-          skill: skill.skill,
-          provider: skill.provider,
-          path: skill.path,
-          tool: finding.tool ?? lintContext.tool
-        }));
-      }
-    }
+
     for (const finding of lintCommandContracts(stripGeneratedHeader(skill.content), contractState.contracts, lintContext)) {
       issues.push(issue(finding.code, finding.severity, finding.message, {
         skill: skill.skill,
