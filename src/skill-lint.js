@@ -4,13 +4,14 @@ const HEADER_START = GENERATED_HEADER_START;
 const HEADER_END = GENERATED_HEADER_END;
 const POLICY_PACKS = new Set(["generic", "dogfood"]);
 
-function uniquePolicies(policies = ["generic"]) {
+function uniquePolicies(policies = ["generic"], customPolicyRules = []) {
   if (policies.includes("none")) {
     return [];
   }
+  const customPacks = new Set(customPolicyRules.map((r) => r.pack).filter(Boolean));
   const selected = [];
   for (const policy of policies) {
-    if (POLICY_PACKS.has(policy) && !selected.includes(policy)) {
+    if ((POLICY_PACKS.has(policy) || customPacks.has(policy)) && !selected.includes(policy)) {
       selected.push(policy);
     }
   }
@@ -414,7 +415,7 @@ export function lintCommandContracts(content, contracts = {}, context = {}) {
 }
 
 export function lintSkillContent(content, context = {}) {
-  const policies = uniquePolicies(context.policyPacks ?? ["generic"]);
+  const policies = uniquePolicies(context.policyPacks ?? ["generic"], context.customPolicyRules);
   const findings = [];
   if (policies.includes("generic")) {
     findings.push(
@@ -430,6 +431,30 @@ export function lintSkillContent(content, context = {}) {
   if (!policies.includes("generic") && policies.includes("dogfood")) {
     findings.push(...lintCommandContracts(content, context.contracts ?? {}, context));
   }
+
+  if (Array.isArray(context.customPolicyRules)) {
+    for (const rule of context.customPolicyRules) {
+      const pack = rule.pack ?? "generic";
+      if (policies.includes(pack)) {
+        try {
+          const regex = new RegExp(rule.pattern);
+          if (regex.test(content)) {
+            findings.push({
+              code: rule.id,
+              severity: rule.severity ?? "error",
+              message: rule.message,
+              skill: context.skill ?? null,
+              tool: context.tool ?? null,
+              path: context.path ?? null
+            });
+          }
+        } catch (err) {
+          // ignore invalid RegExp (already checked at config load time)
+        }
+      }
+    }
+  }
+
   return findings;
 }
 
