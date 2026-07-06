@@ -265,7 +265,8 @@ Full Agent Skills directory providers:
 - `zed`: `~/.agents/skills/{skill}/SKILL.md`
 - `github-copilot`: `~/.copilot/skills/{skill}/SKILL.md`
 - `cline`: `~/.cline/skills/{skill}/SKILL.md`
-- `roo`: `~/.roo/skills/{skill}/SKILL.md`
+- `agent-skills-global`: `~/.agents/skills/{skill}/SKILL.md` (default global publisher sink)
+- `agent-skills-workspace`: `{workspace}/.agents/skills/{skill}/SKILL.md` (default local workspace/lane publisher sink)
 
 Rule and instruction render providers:
 
@@ -289,6 +290,34 @@ Provider config entries can be strings or objects:
 
 Custom roots are validated as local paths. Skillpress does not execute provider
 binaries for detection and does not install IDEs or CLIs.
+
+### Config-Driven Custom Targets
+
+If a team wants to target a custom editor, internal AI agent, or unsupported tool, they can dynamically declare a custom provider (sink) by defining its schema directly inside their local `skillpress.config.json` block:
+
+```json
+{
+  "providers": [
+    {
+      "id": "my-team-agent",
+      "title": "Custom Team Agent",
+      "kind": "skill-directory",
+      "root": ".custom-agent/skills",
+      "layout": "{root}/{skill}/SKILL.md",
+      "fidelity": "full",
+      "supports_auxiliary_files": true
+    }
+  ]
+}
+```
+
+Supported custom provider schema fields:
+- `kind`: `"skill-directory"` (full skill folders), `"rule-directory"` (IDE rule engines), or `"single-instructions-file"`.
+- `layout`: Destination path pattern using variables like `{root}`, `{workspace}`, and `{skill}`.
+- `fidelity`: `"full"` (replicates everything), `"rule-render"` (compiles instructions), or `"summary"` (one unified markdown summary).
+- `supports_auxiliary_files`: Boolean indicating if other assets/attachments are copied.
+- `extension` / `entrypoint` / `title` / `surface_kind` / `surface_id`: (Optional) fields to customize file endings, main rule files, and catalog indexing.
+
 
 ## Publishing Skills & Scoping
 
