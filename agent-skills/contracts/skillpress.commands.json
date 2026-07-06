@@ -5,6 +5,7 @@
   "commands": [
     "boundary",
     "doctor",
+    "publish",
     "repair-plan",
     "status",
     "sync"

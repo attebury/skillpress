@@ -13,10 +13,28 @@ export const PROVIDER_IDS = Object.freeze([
   "continue",
   "devin",
   "github-copilot-instructions",
-  "agents-md"
+  "agents-md",
+  "agent-skills-global",
+  "agent-skills-workspace"
 ]);
 
 const SAFE_SKILL_ID = /^[A-Za-z0-9._-]+$/;
+
+function findLaneRegistry(startDir) {
+  let current = path.resolve(startDir);
+  while (true) {
+    const candidate = path.join(current, "lane-registry.local.json");
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+    const parent = path.dirname(current);
+    if (parent === current) {
+      break;
+    }
+    current = parent;
+  }
+  return null;
+}
 const DEFAULT_PROVIDER_IDS = Object.freeze(["codex", "agents", "cursor", "claude-code"]);
 
 const PROVIDER_DEFINITIONS = Object.freeze([
@@ -202,6 +220,40 @@ const PROVIDER_DEFINITIONS = Object.freeze([
     supports_auxiliary_files: false,
     default_enabled: false,
     detection: "always"
+  },
+  {
+    id: "agent-skills-global",
+    title: "Agent Skills Global",
+    root: ({ home }) => process.env.AGENT_SKILLS_GLOBAL_ROOT ? path.resolve(process.env.AGENT_SKILLS_GLOBAL_ROOT) : path.join(home, ".agents", "skills"),
+    layout: "{root}/{skill}/SKILL.md",
+    kind: "skill-directory",
+    surface_kind: "skill-directory",
+    surface_id: "agent-skills-global",
+    fidelity: "full",
+    root_scope: "home",
+    supports_auxiliary_files: true,
+    default_enabled: true,
+    detection: "always"
+  },
+  {
+    id: "agent-skills-workspace",
+    title: "Agent Skills Workspace",
+    root: ({ repo }) => {
+      const registryFile = findLaneRegistry(repo);
+      if (registryFile) {
+        return path.dirname(registryFile);
+      }
+      return process.env.AGENT_SKILLS_WORKSPACE_ROOT ? path.resolve(process.env.AGENT_SKILLS_WORKSPACE_ROOT) : path.join(repo, ".agents", "skills");
+    },
+    layout: "{root}/{skill}/SKILL.md",
+    kind: "skill-directory",
+    surface_kind: "skill-directory",
+    surface_id: "agent-skills-workspace",
+    fidelity: "full",
+    root_scope: "workspace",
+    supports_auxiliary_files: true,
+    default_enabled: true,
+    detection: "always"
   }
 ]);
 
@@ -242,14 +294,24 @@ function existingParent(targetPath) {
   return cursor;
 }
 
-function assertNoSymlinkEscape(resolvedPath, allowedRoot, field) {
+export function getRealPath(targetPath) {
+  const existing = existingParent(targetPath);
+  if (!existing) {
+    return path.resolve(targetPath);
+  }
+  const realExisting = fs.realpathSync(existing);
+  const relative = path.relative(existing, path.resolve(targetPath));
+  return path.resolve(realExisting, relative);
+}
+
+export function assertNoSymlinkEscape(resolvedPath, allowedRoot, field) {
   const existing = existingParent(resolvedPath);
   if (!existing) {
     return;
   }
-  const realRoot = fs.realpathSync(path.resolve(allowedRoot));
+  const realRoot = getRealPath(allowedRoot);
   const realExisting = fs.realpathSync(existing);
-  if (!isPathInside(realExisting, realRoot)) {
+  if (!isPathInside(realExisting, realRoot) && !isPathInside(realRoot, realExisting)) {
     throw providerError("provider_root_outside_allowed_root", `${field} must not escape its configured root`, {
       field,
       path: resolvedPath,
@@ -302,8 +364,13 @@ function normalizeProviderRequest(entry, { explicit = false } = {}) {
   if (typeof id !== "string" || id.length === 0) {
     throw providerError("config_invalid_provider", "provider config entries must include id");
   }
+  const allowedKeys = [
+    "id", "provider", "enabled", "required", "root", "scope", "allow_undetected", "explicit",
+    "kind", "layout", "fidelity", "supports_auxiliary_files", "extension", "entrypoint",
+    "title", "surface_kind", "surface_id"
+  ];
   for (const key of Object.keys(entry)) {
-    if (!["id", "provider", "enabled", "required", "root", "scope", "allow_undetected", "explicit"].includes(key) || /hook|command/i.test(key)) {
+    if (!allowedKeys.includes(key) || /hook|command/i.test(key)) {
       throw providerError("config_invalid_provider_field", "provider config field is not supported", {
         provider: id,
         field: key
@@ -317,7 +384,16 @@ function normalizeProviderRequest(entry, { explicit = false } = {}) {
     required: entry.required === true,
     root: entry.root,
     scope: entry.scope,
-    allow_undetected: entry.allow_undetected === true
+    allow_undetected: entry.allow_undetected === true,
+    kind: entry.kind,
+    layout: entry.layout,
+    fidelity: entry.fidelity,
+    supports_auxiliary_files: entry.supports_auxiliary_files,
+    extension: entry.extension,
+    entrypoint: entry.entrypoint,
+    title: entry.title,
+    surface_kind: entry.surface_kind,
+    surface_id: entry.surface_id
   };
 }
 
@@ -443,15 +519,34 @@ export function resolveProviderSelection({
     if (request.enabled === false) {
       continue;
     }
-    const definition = definitionById(request.id);
+    let definition = definitionById(request.id);
     if (!definition) {
-      issues.push({
-        code: "unknown_provider",
-        severity: "error",
-        message: `unknown provider '${request.id}'`,
-        provider: request.id
-      });
-      continue;
+      if (request.kind && request.layout) {
+        definition = {
+          id: request.id,
+          title: request.title ?? request.id,
+          root: ({ home, repo }) => repo,
+          layout: request.layout,
+          kind: request.kind,
+          fidelity: request.fidelity ?? "full",
+          surface_kind: request.surface_kind ?? request.kind,
+          surface_id: request.surface_id ?? request.id,
+          root_scope: request.scope ?? "workspace",
+          supports_auxiliary_files: request.supports_auxiliary_files === true,
+          default_enabled: false,
+          detection: "always",
+          extension: request.extension,
+          entrypoint: request.entrypoint
+        };
+      } else {
+        issues.push({
+          code: "unknown_provider",
+          severity: "error",
+          message: `unknown provider '${request.id}'`,
+          provider: request.id
+        });
+        continue;
+      }
     }
     let target;
     try {
