@@ -41,6 +41,8 @@ export const SKILLPRESS_BOUNDARY = Object.freeze({
     "Skillpress composes with external operator workflows without importing their internals"
   ],
   initial_commands: [
+    "skillpress --version",
+    "skillpress version --json",
     "skillpress boundary --json",
     "skillpress status --json",
     "skillpress doctor --json",

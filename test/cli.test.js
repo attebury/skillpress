@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const cli = path.join(repoRoot, "bin", "skillpress.js");
+const pkg = JSON.parse(fs.readFileSync(path.join(repoRoot, "package.json"), "utf8"));
 
 test("top-level help prints usage and exits cleanly", () => {
   const result = spawnSync(process.execPath, [cli, "--help"], {
@@ -16,11 +17,81 @@ test("top-level help prints usage and exits cleanly", () => {
   });
 
   assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /skillpress --version/);
+  assert.match(result.stdout, /skillpress version --json/);
   assert.match(result.stdout, /skillpress boundary --json/);
   assert.match(result.stdout, /skillpress repair-plan --json/);
   assert.match(result.stdout, /--source-layout auto\|tool-scoped\|agent-skills\|claude-skills/);
   assert.match(result.stdout, /--diagram-telemetry/);
   assert.equal(result.stderr, "");
+});
+
+test("version commands are repo independent", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "skillpress-cli-version-"));
+  const cwd = path.join(root, "not-a-repo");
+  const homeDir = path.join(root, "home");
+  fs.mkdirSync(cwd, { recursive: true });
+  fs.mkdirSync(homeDir, { recursive: true });
+  fs.writeFileSync(path.join(cwd, "skillpress.config.json"), "{");
+  const env = { ...process.env, HOME: homeDir };
+
+  const plain = spawnSync(process.execPath, [cli, "--version"], {
+    cwd,
+    env,
+    encoding: "utf8"
+  });
+  assert.equal(plain.status, 0, plain.stderr || plain.stdout);
+  assert.equal(plain.stdout.trim(), `skillpress ${pkg.version}`);
+  assert.equal(plain.stderr, "");
+
+  const json = spawnSync(process.execPath, [cli, "version", "--json"], {
+    cwd,
+    env,
+    encoding: "utf8"
+  });
+  assert.equal(json.status, 0, json.stderr || json.stdout);
+  const packet = JSON.parse(json.stdout);
+  assert.equal(packet.ok, true);
+  assert.equal(packet.type, "skillpress.version.v1");
+  assert.equal(packet.schema_version, 1);
+  assert.equal(packet.tool, "skillpress");
+  assert.equal(packet.package_name, pkg.name);
+  assert.equal(packet.version, pkg.version);
+  assert.equal(packet.source, "package.json");
+  assert.equal(packet.node_version, process.version);
+  assert.equal(Object.hasOwn(packet, "executable_path"), false);
+});
+
+test("version command rejects unsupported forms with bounded diagnostics", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "skillpress-cli-version-negative-"));
+  fs.mkdirSync(root, { recursive: true });
+
+  const missingJson = spawnSync(process.execPath, [cli, "version"], {
+    cwd: root,
+    encoding: "utf8"
+  });
+  assert.equal(missingJson.status, 2);
+  assert.equal(missingJson.stdout, "");
+  assert.match(missingJson.stderr, /version currently requires --json/);
+  assert.ok(missingJson.stderr.length < 120);
+
+  const badFlag = spawnSync(process.execPath, [cli, "version", "--json", "--bad-flag"], {
+    cwd: root,
+    encoding: "utf8"
+  });
+  assert.equal(badFlag.status, 2);
+  assert.equal(badFlag.stdout, "");
+  assert.match(badFlag.stderr, /unsupported option: --bad-flag/);
+  assert.ok(badFlag.stderr.length < 120);
+
+  const badTopLevel = spawnSync(process.execPath, [cli, "--version", "--bad-flag"], {
+    cwd: root,
+    encoding: "utf8"
+  });
+  assert.equal(badTopLevel.status, 2);
+  assert.equal(badTopLevel.stdout, "");
+  assert.match(badTopLevel.stderr, /does not accept additional options/);
+  assert.ok(badTopLevel.stderr.length < 120);
 });
 
 test("status and doctor JSON commands run against an isolated empty workspace", () => {

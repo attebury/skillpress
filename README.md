@@ -14,6 +14,8 @@ skill format.
 
 ```bash
 npm install -g skillpress@beta
+skillpress --version
+skillpress version --json
 skillpress boundary --json
 ```
 
@@ -56,12 +58,18 @@ With no config, Skillpress looks for `agent-skills/src` using the
 ## Commands
 
 ```bash
+skillpress --version
+skillpress version --json
 skillpress boundary --json
 skillpress repair-plan --json
 skillpress status --json
 skillpress doctor --json
 skillpress sync --json --provider codex --tool runlane
 ```
+
+Use `skillpress --version` for stable human-readable text and
+`skillpress version --json` for repo-independent machine metadata suitable for
+release checks, support prompts, and local promotion verification.
 
 `status`, `doctor`, and `sync` accept provider, tool, config, source, contract,
 policy, and manifest filters:

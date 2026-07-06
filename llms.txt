@@ -13,6 +13,7 @@ Skillpress is not a skill authoring system, a CLI promoter, a workflow orchestra
 ## Source
 
 - [CLI entrypoint](https://raw.githubusercontent.com/attebury/skillpress/main/bin/skillpress.js): Command routing for boundary, status, doctor, and sync.
+- [Version info](https://raw.githubusercontent.com/attebury/skillpress/main/src/version-info.js): Repo-independent CLI version packet and human-readable version text.
 - [Source discovery](https://raw.githubusercontent.com/attebury/skillpress/main/src/source.js): Agent Skills directory discovery, hashing, and source-tree safety checks.
 - [Provider targets](https://raw.githubusercontent.com/attebury/skillpress/main/src/providers.js): Provider-specific install roots for Codex, agent-local roots, Claude Code, and Cursor.
 - [Sync](https://raw.githubusercontent.com/attebury/skillpress/main/src/sync.js): Rendering canonical skills into provider targets and writing install manifests.
