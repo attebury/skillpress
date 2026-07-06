@@ -19,7 +19,6 @@ Skillpress is not a skill authoring system, a CLI promoter, a workflow orchestra
 - [Sync](https://raw.githubusercontent.com/attebury/skillpress/main/src/sync.js): Rendering canonical skills into provider targets and writing install manifests.
 - [Status](https://raw.githubusercontent.com/attebury/skillpress/main/src/status.js): Installed-vs-expected reporting and drift detection.
 - [Doctor](https://raw.githubusercontent.com/attebury/skillpress/main/src/doctor.js): Aggregated status and policy findings.
-- [Diagram emission](https://raw.githubusercontent.com/attebury/skillpress/main/src/diagram-emission.js): Opt-in field-based Diagram telemetry for bounded sync/status/doctor diagnostics; never authoritative.
 - [Skill lint](https://raw.githubusercontent.com/attebury/skillpress/main/src/skill-lint.js): Generic Agent Skills linting and optional dogfood policy rules.
 - [Contracts](https://raw.githubusercontent.com/attebury/skillpress/main/src/contracts.js): Command contract loading for validating command references.
 - [Manifest](https://raw.githubusercontent.com/attebury/skillpress/main/src/manifest.js): Install manifest validation, v1 reads, and v2 writes.
@@ -32,7 +31,6 @@ Skillpress is not a skill authoring system, a CLI promoter, a workflow orchestra
 
 ## Optional
 
-- [Skillpress consumer skill](https://github.com/attebury/skillpress/tree/main/agent-skills/src/skillpress): Source-only Skillpress guidance and Diagram field-emission examples; not shipped in the npm package.
-- [Diagram emission docs](https://raw.githubusercontent.com/attebury/skillpress/main/docs/diagram-emission.md): Telemetry boundary, opt-in CLI flag, and safety rules.
+- [Skillpress consumer skill](https://github.com/attebury/skillpress/tree/main/agent-skills/src/skillpress): Source-only Skillpress guidance; not shipped in the npm package.
 - [Runlane example](https://github.com/attebury/skillpress/tree/main/examples/runlane): Example tool-scoped source and optional dogfood policy configuration; not shipped in the npm package.
 - [Remogram example](https://github.com/attebury/skillpress/tree/main/examples/remogram): Example command contracts and policy fixtures; not shipped in the npm package.
