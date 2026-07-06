@@ -46,7 +46,7 @@ test("ci policy pack detects interactive prompt blockers and node executions", (
 });
 
 test("performance policy pack detects absolute paths and oversized code blocks", () => {
-  const badPath = frontmatter + "\nCheck in /Users/attebury/Documents/lanes/skillpress";
+  const badPath = frontmatter + "\nCheck in /Users/someone/Documents/lanes/skillpress";
   let findings = lintSkillContent(badPath, { policyPacks: ["performance"] });
   assert.ok(findings.some(f => f.code === "performance_absolute_paths"));
 
