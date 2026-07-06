@@ -1,0 +1,16 @@
+{
+  "version": "1",
+  "provider": "gitea-api",
+  "remote": "origin",
+  "owner": "example",
+  "repo": "skillpress",
+  "baseUrl": "https://forge.example",
+  "write_commands": [
+    "cr_open",
+    "status_set",
+    "merge",
+    "issue_close",
+    "issue_comment",
+    "cr_edit"
+  ]
+}
