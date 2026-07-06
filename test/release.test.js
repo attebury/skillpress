@@ -237,30 +237,28 @@ test("releasepress config uses current public delivery objects", {
       }
     },
     {
-      id: "npm-beta",
+      id: "npm-latest",
       kind: "package_registry",
       provider: "npm",
       enabled: true,
       review_target: "local-public-review",
       artifact: "npm-package",
-      channel: "beta",
-      dist_tag: "beta",
+      channel: "latest",
+      dist_tag: "latest",
       workspace: false,
       launch_root: "source",
       launch_path: ".",
       launcher: {
         command_argv: [
           "npm",
-          "publish",
-          "--tag",
-          "beta"
+          "publish"
         ]
       },
       verify: {
         kind: "argv",
         command_argv: ["npm", "view", "skillpress", "dist-tags", "--json"],
         expect: {
-          beta: "{version}"
+          latest: "{version}"
         }
       }
     }
@@ -284,11 +282,11 @@ test("releasepress config passes the installed plan contract", {
   assert.equal(packet.artifacts[0].id, "npm-package");
   assert.deepEqual(packet.delivery.providers.map((provider) => [provider.id, provider.enabled]), [
     ["github-public", true],
-    ["npm-beta", true]
+    ["npm-latest", true]
   ]);
   assert.deepEqual(packet.delivery.providers.map((provider) => [provider.id, provider.launcher_argv]), [
     ["github-public", ["git", "push", "git@github.com:attebury/skillpress.git", "HEAD:refs/heads/main"]],
-    ["npm-beta", ["npm", "publish", "--tag", "beta"]]
+    ["npm-latest", ["npm", "publish"]]
   ]);
 });
 
