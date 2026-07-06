@@ -26,6 +26,15 @@ skillpress sync --json --tool <tool> --provider codex
 skillpress sync --json --config skillpress.config.json --provider cursor
 ```
 
+Publish portable Agent Skills to customization roots (global, forest, or tree scope):
+
+```bash
+skillpress publish --json --skill <name> [--scope global|forest|tree] [--lanes <lane1,lane2>] [--dry-run]
+```
+
+Use `publish` to deploy raw `SKILL.md` structures into active workspace worktrees or global customization directories.
+
+
 Provider roots are install caches. Do not edit `.codex/skills`, `.agents/skills`,
 `.claude/skills`, or `.cursor/rules/skillpress` as canonical source.
 
