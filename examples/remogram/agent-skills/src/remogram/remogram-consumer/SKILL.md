@@ -1,6 +1,8 @@
 ---
 name: remogram-consumer
 description: Use Remogram for forge facts such as PR state, checks, and merge plans.
+skillpress_publish_scope: lane
+skillpress_publish_lanes: [merge]
 ---
 
 # Remogram Consumer
