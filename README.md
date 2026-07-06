@@ -250,7 +250,7 @@ validates configured source layouts against the current public layout list.
 
 ## Provider Targets
 
-Default providers are `codex`, `agents`, `cursor`, and `claude-code`. Tool
+Default providers are `codex`, `agents`, `cursor`, `claude-code`, and `antigravity`. Tool
 specific home providers such as Codex and Claude Code are optional by default:
 if their local config directory is absent, default sync/status/doctor reports a
 `provider_unavailable` warning and skips that target. Explicit
@@ -265,6 +265,8 @@ Full Agent Skills directory providers:
 - `zed`: `~/.agents/skills/{skill}/SKILL.md`
 - `github-copilot`: `~/.copilot/skills/{skill}/SKILL.md`
 - `cline`: `~/.cline/skills/{skill}/SKILL.md`
+- `roo`: `~/.roo/skills/{skill}/SKILL.md`
+- `antigravity`: `~/.gemini/config/skills/{skill}/SKILL.md` (Antigravity global customizations)
 - `agent-skills-global`: `~/.agents/skills/{skill}/SKILL.md` (default global publisher sink)
 - `agent-skills-workspace`: `{workspace}/.agents/skills/{skill}/SKILL.md` (default local workspace/lane publisher sink)
 
