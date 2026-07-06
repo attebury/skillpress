@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import { boundaryPacket } from "../src/boundary.js";
-import { emitDiagramTelemetry } from "../src/diagram-emission.js";
 import { doctorPacket } from "../src/doctor.js";
 import { publishPacket } from "../src/publish.js";
 import { repairPlanPacket } from "../src/repair-plan.js";
@@ -38,30 +37,15 @@ function usage() {
     "skillpress version --json",
     "skillpress boundary --json",
     `skillpress repair-plan --json [--config <path>] [--manifest <path>] [--provider ${providerHelp}] [--tool <tool>] [--source-root <path>] [--source-layout auto|tool-scoped|agent-skills|claude-skills] [--contract-root <path>] [--policy generic|dogfood|none]`,
-    `skillpress status --json [--config <path>] [--manifest <path>] [--provider ${providerHelp}] [--tool <tool>] [--source-root <path>] [--source-layout auto|tool-scoped|agent-skills|claude-skills] [--contract-root <path>] [--policy generic|dogfood|none] [--diagram-telemetry]`,
-    `skillpress doctor --json [--config <path>] [--manifest <path>] [--provider ${providerHelp}] [--tool <tool>] [--source-root <path>] [--source-layout auto|tool-scoped|agent-skills|claude-skills] [--contract-root <path>] [--policy generic|dogfood|none] [--diagram-telemetry]`,
-    `skillpress sync --json [--config <path>] [--provider ${providerHelp}] [--tool <tool>] [--manifest <path>] [--source-root <path>] [--source-layout auto|tool-scoped|agent-skills|claude-skills] [--contract-root <path>] [--policy generic|dogfood|none] [--dry-run] [--diagram-telemetry]`,
+    `skillpress status --json [--config <path>] [--manifest <path>] [--provider ${providerHelp}] [--tool <tool>] [--source-root <path>] [--source-layout auto|tool-scoped|agent-skills|claude-skills] [--contract-root <path>] [--policy generic|dogfood|none]`,
+    `skillpress doctor --json [--config <path>] [--manifest <path>] [--provider ${providerHelp}] [--tool <tool>] [--source-root <path>] [--source-layout auto|tool-scoped|agent-skills|claude-skills] [--contract-root <path>] [--policy generic|dogfood|none]`,
+    `skillpress sync --json [--config <path>] [--provider ${providerHelp}] [--tool <tool>] [--manifest <path>] [--source-root <path>] [--source-layout auto|tool-scoped|agent-skills|claude-skills] [--contract-root <path>] [--policy generic|dogfood|none] [--dry-run]`,
     "skillpress publish --json --skill <name> [--scope global|forest|tree] [--lanes <lane1,lane2>] [--workspace-root <path>] [--dry-run]"
   ].join("\n");
 }
 
 const [command, ...args] = process.argv.slice(2);
 const wantsJson = args.includes("--json");
-const wantsDiagramTelemetry = args.includes("--diagram-telemetry");
-
-function withDiagramTelemetry(commandName, packet) {
-  if (!wantsDiagramTelemetry) {
-    return packet;
-  }
-  return {
-    ...packet,
-    diagram_telemetry: emitDiagramTelemetry({
-      command: commandName,
-      packet,
-      cwd: process.cwd()
-    })
-  };
-}
 
 function unsupportedVersionOption(args) {
   return args.find((arg) => arg !== "--json") ?? null;
@@ -119,7 +103,7 @@ if (command === "--version") {
       contractRoot: readOption(args, "--contract-root"),
       policyPacks: readOptions(args, "--policy")
     });
-    printJson(withDiagramTelemetry("status", packet));
+    printJson(packet);
   }
 } else if (command === "repair-plan") {
   if (!wantsJson) {
@@ -156,7 +140,7 @@ if (command === "--version") {
       contractRoot: readOption(args, "--contract-root"),
       policyPacks: readOptions(args, "--policy")
     });
-    printJson(withDiagramTelemetry("doctor", packet));
+    printJson(packet);
     if (!packet.ok) {
       process.exitCode = 1;
     }
@@ -178,7 +162,7 @@ if (command === "--version") {
         policyPacks: readOptions(args, "--policy"),
         dryRun: args.includes("--dry-run")
       });
-      printJson(withDiagramTelemetry("sync", packet));
+      printJson(packet);
       if (!packet.ok) {
         process.exitCode = 1;
       }
@@ -190,7 +174,7 @@ if (command === "--version") {
         code: error.code ?? "skillpress_sync_failed",
         message: error.message
       };
-      printJson(withDiagramTelemetry("sync", packet));
+      printJson(packet);
       process.exitCode = 1;
     }
   }
