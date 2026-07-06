@@ -58,10 +58,6 @@ test("public export script uses an explicit public source allowlist", {
     "README.md",
     "SECURITY.md",
     "bin",
-    "docs/decisions/skillpress-boundary.md",
-    "docs/installed-hygiene.md",
-    "docs/operating-model.md",
-    "docs/release.md",
     "examples",
     "llms.txt",
     "package.json",
@@ -134,7 +130,6 @@ test("releasepress config exports an allowlisted public source tree", {
     "SECURITY.md",
     "agent-skills/**",
     "bin/**",
-    "docs/**",
     "examples/**",
     "llms.txt",
     "package.json",
@@ -349,39 +344,10 @@ test("releasepress package surface excludes non-runtime sources", {
   }
 });
 
-test("release docs describe releasepress beta flow", () => {
-  const docs = fs.readFileSync(path.join(repoRoot, "docs", "release.md"), "utf8");
-
-  assert.match(docs, /releasepress boundary --json/);
-  assert.match(docs, /releasepress plan --json --config releasepress\.config\.json/);
-  assert.match(docs, /releasepress export --json --config releasepress\.config\.json/);
-  assert.match(docs, /releasepress scan --json --config releasepress\.config\.json/);
-  assert.match(docs, /releasepress package --json --config releasepress\.config\.json/);
-  assert.match(docs, /releasepress stage --json --config releasepress\.config\.json/);
-  assert.match(docs, /releasepress public-review --json --config releasepress\.config\.json/);
-  assert.match(docs, /releasepress attest-review --json --config releasepress\.config\.json/);
-  assert.match(docs, /releasepress checklist --json --config releasepress\.config\.json/);
-  assert.match(docs, /releasepress verify --json --config releasepress\.config\.json/);
-  assert.match(docs, /releasepress promote local --json --config releasepress\.config\.json/);
-  assert.match(docs, /releasepress promote provider github-public --json --config releasepress\.config\.json/);
-  assert.match(docs, /releasepress promote provider npm-beta --json --config releasepress\.config\.json/);
-  assert.match(docs, /releasepress promote public --json --config releasepress\.config\.json/);
-  assert.match(docs, /npm pack --dry-run --json/);
-  assert.match(docs, /npm publish --tag beta/);
-  assert.match(docs, /npm install -g skillpress@beta/);
-  assert.match(docs, /clean, committed checkout/);
-  assert.doesNotMatch(docs, /export-public-main/);
-  assert.doesNotMatch(docs, /force/);
-  assert.doesNotMatch(docs, /runlane/i);
-  assert.doesNotMatch(docs, /dogfood/i);
-  assert.doesNotMatch(docs, /private/i);
-});
-
 test("new public release files avoid exact local secret and forge markers", () => {
   const files = [
     "README.md",
     "llms.txt",
-    "docs/release.md",
     ".github/workflows/test.yml",
     ".gitignore",
     ".remogram.json.example"

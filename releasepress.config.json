@@ -25,7 +25,6 @@
     "SECURITY.md",
     "agent-skills/**",
     "bin/**",
-    "docs/**",
     "examples/**",
     "llms.txt",
     "package.json",
