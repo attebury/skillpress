@@ -1,6 +1,6 @@
 {
   "name": "skillpress",
-  "version": "0.1.0-beta.1",
+  "version": "0.1.0-beta.2",
   "description": "Package manager for portable Agent Skills directories across agent surfaces.",
   "license": "MIT",
   "type": "module",
