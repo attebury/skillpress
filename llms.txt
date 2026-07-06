@@ -7,8 +7,6 @@ Skillpress is not a skill authoring system, a CLI promoter, a workflow orchestra
 ## Start Here
 
 - [README](https://raw.githubusercontent.com/attebury/skillpress/main/README.md): Install, quickstart, source layouts, provider targets, manifest shape, and development commands.
-- [Operating model](https://raw.githubusercontent.com/attebury/skillpress/main/docs/operating-model.md): Source and target model, verification rules, and public release constraints.
-- [Boundary](https://raw.githubusercontent.com/attebury/skillpress/main/docs/decisions/skillpress-boundary.md): Ownership boundary, excluded responsibilities, and product invariants.
 
 ## Source
 
@@ -25,7 +23,6 @@ Skillpress is not a skill authoring system, a CLI promoter, a workflow orchestra
 
 ## Release
 
-- [Release process](https://raw.githubusercontent.com/attebury/skillpress/main/docs/release.md): Public verification, beta npm publish, and smoke install steps.
 - [Security policy](https://raw.githubusercontent.com/attebury/skillpress/main/SECURITY.md): Supported security surface and reporting path.
 - [Package metadata](https://raw.githubusercontent.com/attebury/skillpress/main/package.json): Runtime package metadata, npm package allowlist, and test scripts.
 
