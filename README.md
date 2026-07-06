@@ -178,6 +178,43 @@ The pack rejects missing-check waivers, lane `npm link`, hardcoded
 shim language. External users can run the `generic` pack without inheriting
 dogfood rules.
 
+
+## Custom Policy Packs & Rules
+
+Teams can dynamically define their own custom policy rules and group them into custom policy packs inside `skillpress.config.json` using the `"custom_policy_rules"` property:
+
+```json
+{
+  "source_roots": [
+    { "path": "agent-skills/src", "layout": "tool-scoped" }
+  ],
+  "policy_packs": ["generic", "security"],
+  "custom_policy_rules": [
+    {
+      "id": "security-no-eval",
+      "pattern": "\\beval\\s*\\(",
+      "message": "Do not recommend raw 'eval()' calls in instructions",
+      "severity": "error",
+      "pack": "security"
+    },
+    {
+      "id": "style-avoid-todos",
+      "pattern": "todo:",
+      "message": "Please remove temporary todo markers before publishing",
+      "severity": "warning",
+      "pack": "generic"
+    }
+  ]
+}
+```
+
+### Custom Policy Rule Properties
+* `id`: A unique non-empty string identifier for the lint finding.
+* `pattern`: A standard regular expression pattern matched against the skill's file content.
+* `message`: The custom error or warning description reported on failure.
+* `severity`: Either `"error"` (fails validation) or `"warning"` (reports drift but passes). Optional; defaults to `"error"`.
+* `pack`: The name of the policy pack the rule belongs to. Optional; defaults to `"generic"`. Any custom pack name defined here is dynamically registered and can be enabled in `"policy_packs"`.
+
 ## Examples
 
 Runlane and Remogram example projects live under `examples/runlane` and

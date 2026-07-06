@@ -290,7 +290,7 @@ function contractIssueInScope(entry, toolScope) {
   return fileTool === toolScope.requestedTool;
 }
 
-function collectSourceIssues({ sourceState, contractState, policyPacks }) {
+function collectSourceIssues({ sourceState, contractState, policyPacks, customPolicyRules }) {
   const issues = [];
   for (const source of sourceState.sources) {
     const context = {
@@ -299,6 +299,7 @@ function collectSourceIssues({ sourceState, contractState, policyPacks }) {
       path: source.path,
       contracts: contractState.contracts,
       policyPacks,
+      customPolicyRules,
       source
     };
     for (const finding of lintSkillContent(source.content, context)) {
@@ -678,7 +679,8 @@ export function statusPacket(options = {}) {
     ...collectSourceIssues({
       sourceState,
       contractState,
-      policyPacks: runtimeConfig.config.policy_packs
+      policyPacks: runtimeConfig.config.policy_packs,
+      customPolicyRules: runtimeConfig.config.custom_policy_rules
     }),
     ...collectIssues({
       inventory,

@@ -172,6 +172,7 @@ export function syncPacket(options = {}) {
       path: source.path,
       contracts: contractState.contracts,
       policyPacks: runtimeConfig.config.policy_packs,
+      customPolicyRules: runtimeConfig.config.custom_policy_rules,
       source
     });
     for (const finding of findings) {

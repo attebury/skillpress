@@ -40,6 +40,7 @@ function defaultConfig() {
     source_roots: [{ path: DEFAULT_SOURCE_ROOT, layout: "tool-scoped" }],
     contract_root: DEFAULT_CONTRACT_ROOT,
     policy_packs: ["generic"],
+    custom_policy_rules: [],
     providers: null,
     manifest: {
       path: null
@@ -54,38 +55,40 @@ function readConfigFile(configPath, cwd) {
     return { path: requestedPath, document: null, issues: [] };
   }
   try {
-    return {
-      path: requestedPath,
-      document: JSON.parse(fs.readFileSync(requestedPath, "utf8")),
-      issues: []
-    };
+    const raw = fs.readFileSync(requestedPath, "utf8");
+    const document = JSON.parse(raw);
+    if (!document || typeof document !== "object" || Array.isArray(document)) {
+      return { path: requestedPath, document: null, issues: [configIssue("config_invalid_json", "error", "config root must be a JSON object")] };
+    }
+    return { path: requestedPath, document, issues: [] };
   } catch (error) {
-    return {
-      path: requestedPath,
-      document: null,
-      issues: [configIssue("config_invalid", "error", "Skillpress config could not be read", {
-        path: requestedPath,
-        error: error.message
-      })]
-    };
+    return { path: requestedPath, document: null, issues: [configIssue("config_invalid_json", "error", error.message)] };
   }
 }
 
 function normalizeSourceRoots(document, overrides, issues) {
   const requestedRoots = overrides.sourceRoot
     ? [{ path: overrides.sourceRoot, layout: overrides.sourceLayout ?? "auto" }]
-    : Array.isArray(document?.source_roots) && document.source_roots.length > 0
+    : Array.isArray(document?.source_roots)
       ? document.source_roots
       : defaultConfig().source_roots;
 
   return requestedRoots.map((entry) => {
-    const sourcePath = typeof entry === "string" ? entry : entry?.path;
-    const requestedLayout = overrides.sourceLayout ?? (typeof entry === "string" ? "auto" : entry?.layout ?? "auto");
-    if (typeof sourcePath !== "string" || sourcePath.length === 0) {
-      issues.push(configIssue("config_invalid_source_root", "error", "source root path must be a non-empty string"));
-      return { path: "", layout: "agent-skills" };
+    if (typeof entry === "string") {
+      const layout = overrides.sourceLayout ?? "auto";
+      const normalized = normalizeLayout(layout, entry);
+      if (normalized.issue) {
+        issues.push(normalized.issue);
+      }
+      return { path: entry, layout: normalized.layout };
     }
-    const normalized = normalizeLayout(requestedLayout, sourcePath);
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      issues.push(configIssue("config_invalid_source_root", "error", "source_roots entries must be strings or objects"));
+      return { path: "", layout: "auto" };
+    }
+    const sourcePath = entry.path ?? "";
+    const layout = overrides.sourceLayout ?? entry.layout ?? "auto";
+    const normalized = normalizeLayout(layout, sourcePath);
     if (normalized.issue) {
       issues.push(normalized.issue);
     }
@@ -93,7 +96,7 @@ function normalizeSourceRoots(document, overrides, issues) {
   });
 }
 
-function normalizePolicies(document, overrides, issues) {
+function normalizePolicies(document, overrides, issues, customPolicyRules = []) {
   const requestedPolicies = overrides.policyPacks
     ? parseList(overrides.policyPacks)
     : Array.isArray(document?.policy_packs)
@@ -102,9 +105,10 @@ function normalizePolicies(document, overrides, issues) {
   if (requestedPolicies.includes("none")) {
     return [];
   }
+  const customPacks = new Set(customPolicyRules.map((r) => r.pack).filter(Boolean));
   const policies = [];
   for (const policy of requestedPolicies) {
-    if (!POLICY_PACKS.includes(policy)) {
+    if (!POLICY_PACKS.includes(policy) && !customPacks.has(policy)) {
       issues.push(configIssue("config_invalid_policy_pack", "error", "policy pack is not supported", { policy }));
       continue;
     }
@@ -196,14 +200,67 @@ function explicitProviderRequest(entry, provider) {
   return { ...entry, explicit: true };
 }
 
+function normalizeCustomPolicyRules(document, issues) {
+  if (document?.custom_policy_rules === undefined) {
+    return [];
+  }
+  if (!Array.isArray(document.custom_policy_rules)) {
+    issues.push(configIssue("config_invalid_custom_policy_rules", "error", "custom_policy_rules must be an array"));
+    return [];
+  }
+  const rules = [];
+  const seenIds = new Set();
+  for (const entry of document.custom_policy_rules) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      issues.push(configIssue("config_invalid_custom_policy_rule", "error", "custom_policy_rules entries must be objects"));
+      continue;
+    }
+    const { id, pattern, message, severity = "error", pack = "generic" } = entry;
+    if (typeof id !== "string" || id.length === 0) {
+      issues.push(configIssue("config_invalid_custom_policy_rule_field", "error", "custom policy rule must include non-empty string 'id'"));
+      continue;
+    }
+    if (seenIds.has(id)) {
+      issues.push(configIssue("config_invalid_custom_policy_rule_duplicate", "error", `duplicate custom policy rule id '${id}'`, { id }));
+      continue;
+    }
+    seenIds.add(id);
+    if (typeof pattern !== "string" || pattern.length === 0) {
+      issues.push(configIssue("config_invalid_custom_policy_rule_field", "error", "custom policy rule must include non-empty string 'pattern'", { id }));
+      continue;
+    }
+    try {
+      new RegExp(pattern);
+    } catch (err) {
+      issues.push(configIssue("config_invalid_custom_policy_rule_pattern", "error", `invalid regex pattern in custom rule '${id}'`, { id, pattern }));
+      continue;
+    }
+    if (typeof message !== "string" || message.length === 0) {
+      issues.push(configIssue("config_invalid_custom_policy_rule_field", "error", "custom policy rule must include non-empty string 'message'", { id }));
+      continue;
+    }
+    if (severity !== "error" && severity !== "warning") {
+      issues.push(configIssue("config_invalid_custom_policy_rule_severity", "error", "custom policy rule severity must be 'error' or 'warning'", { id, severity }));
+      continue;
+    }
+    if (typeof pack !== "string" || pack.length === 0) {
+      issues.push(configIssue("config_invalid_custom_policy_rule_field", "error", "custom policy rule pack must be a non-empty string", { id }));
+      continue;
+    }
+    rules.push({ id, pattern, message, severity, pack });
+  }
+  return rules;
+}
+
 export function resolveRuntimeConfig(options = {}) {
   const cwd = path.resolve(options.cwd ?? process.cwd());
   const configState = readConfigFile(options.configPath, cwd);
   const issues = [...configState.issues];
   const document = configState.document ?? {};
+  const customPolicyRules = normalizeCustomPolicyRules(document, issues);
   const policyPacks = normalizePolicies(document, {
     policyPacks: options.policyPacks
-  }, issues);
+  }, issues, customPolicyRules);
   const sourceRoots = normalizeSourceRoots(document, {
     sourceRoot: options.sourceRoot,
     sourceLayout: options.sourceLayout
@@ -223,6 +280,7 @@ export function resolveRuntimeConfig(options = {}) {
       source_roots: sourceRoots,
       contract_root: options.contractRoot ?? document.contract_root ?? DEFAULT_CONTRACT_ROOT,
       policy_packs: policyPacks,
+      custom_policy_rules: customPolicyRules,
       providers,
       configured_providers: configuredProviders,
       manifest
