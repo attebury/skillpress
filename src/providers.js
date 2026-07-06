@@ -15,7 +15,8 @@ export const PROVIDER_IDS = Object.freeze([
   "github-copilot-instructions",
   "agents-md",
   "agent-skills-global",
-  "agent-skills-workspace"
+  "agent-skills-workspace",
+  "antigravity"
 ]);
 
 const SAFE_SKILL_ID = /^[A-Za-z0-9._-]+$/;
@@ -35,7 +36,7 @@ function findLaneRegistry(startDir) {
   }
   return null;
 }
-const DEFAULT_PROVIDER_IDS = Object.freeze(["codex", "agents", "cursor", "claude-code"]);
+const DEFAULT_PROVIDER_IDS = Object.freeze(["codex", "agents", "cursor", "claude-code", "antigravity"]);
 
 const PROVIDER_DEFINITIONS = Object.freeze([
   {
@@ -220,6 +221,21 @@ const PROVIDER_DEFINITIONS = Object.freeze([
     supports_auxiliary_files: false,
     default_enabled: false,
     detection: "always"
+  },
+  {
+    id: "antigravity",
+    title: "Antigravity",
+    root: ({ home }) => path.join(home, ".gemini", "config", "skills"),
+    detect_path: ({ home }) => path.join(home, ".gemini", "config"),
+    layout: "{root}/{skill}/SKILL.md",
+    kind: "skill-directory",
+    surface_kind: "skill-directory",
+    surface_id: "antigravity-global",
+    fidelity: "full",
+    root_scope: "home",
+    supports_auxiliary_files: true,
+    default_enabled: true,
+    detection: "path-exists"
   },
   {
     id: "agent-skills-global",

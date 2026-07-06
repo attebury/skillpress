@@ -23,7 +23,7 @@ function writeFile(filePath, content) {
   fs.writeFileSync(filePath, content);
 }
 
-function detectProviders(fx, providers = ["codex", "claude-code"]) {
+function detectProviders(fx, providers = ["codex", "claude-code", "antigravity"]) {
   for (const provider of providers) {
     if (provider === "codex") {
       fs.mkdirSync(path.join(fx.homeDir, ".codex"), { recursive: true });
@@ -39,6 +39,9 @@ function detectProviders(fx, providers = ["codex", "claude-code"]) {
     }
     if (provider === "roo") {
       fs.mkdirSync(path.join(fx.homeDir, ".roo"), { recursive: true });
+    }
+    if (provider === "antigravity") {
+      fs.mkdirSync(path.join(fx.homeDir, ".gemini", "config"), { recursive: true });
     }
   }
 }
@@ -86,8 +89,8 @@ test("sync renders canonical skills into installable provider roots and updates 
   assert.equal(packet.manifest.explicit, false);
   assert.equal(fs.existsSync(path.join(fx.cwd, "skillpress.manifest.json")), false);
   assert.ok(packet.manifest.path.startsWith(path.join(fx.homeDir, ".local", "state", "skillpress")));
-  assert.equal(packet.summary.write_count, 4);
-  assert.deepEqual(packet.writes.map((entry) => entry.provider).sort(), ["agents", "claude-code", "codex", "cursor"]);
+  assert.equal(packet.summary.write_count, 5);
+  assert.deepEqual(packet.writes.map((entry) => entry.provider).sort(), ["agents", "antigravity", "claude-code", "codex", "cursor"]);
   for (const write of packet.writes) {
     assert.equal(write.written, true);
     assert.equal(fs.existsSync(write.installed_path), true);
@@ -100,9 +103,10 @@ test("sync renders canonical skills into installable provider roots and updates 
 
   const manifest = readManifest(packet);
   assert.equal(manifest.version, 2);
-  assert.equal(manifest.entries.length, 4);
+  assert.equal(manifest.entries.length, 5);
   assert.ok(manifest.entries.some((entry) => entry.provider === "codex" && entry.installed_path.startsWith("~/")));
   assert.ok(manifest.entries.some((entry) => entry.provider === "claude-code" && entry.installed_path.startsWith("~/")));
+  assert.ok(manifest.entries.some((entry) => entry.provider === "antigravity" && entry.installed_path.startsWith("~/")));
   assert.ok(manifest.entries.some((entry) => entry.provider === "cursor" && entry.installed_path === ".cursor/rules/skillpress/runlane-consumer.mdc"));
   assert.ok(manifest.entries.every((entry) => entry.source_layout === "tool-scoped"));
   assert.ok(manifest.entries.every((entry) => entry.source_tree_hash?.startsWith("sha256:")));

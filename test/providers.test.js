@@ -23,6 +23,7 @@ test("provider targets model known roots for installable providers", () => {
   assert.equal(targets.find((entry) => entry.id === "devin").root, path.join(cwd, ".devin", "rules"));
   assert.equal(targets.find((entry) => entry.id === "github-copilot-instructions").root, path.join(cwd, ".github", "instructions", "skillpress"));
   assert.equal(targets.find((entry) => entry.id === "agents-md").root, cwd);
+  assert.equal(targets.find((entry) => entry.id === "antigravity").root, path.join(homeDir, ".gemini", "config", "skills"));
 });
 
 test("installed skill paths require safe skill ids", () => {
